@@ -9,10 +9,14 @@ Github: https://github.com/Eric-Canas
 Email: eric@ericcanas.com
 Date: 05-05-2023
 """
+from __future__ import annotations
 
 import os
 import cv2
 import time
+from warnings import warn
+
+import numpy as np
 
 
 class _VideoWebcam:
@@ -34,27 +38,25 @@ class _VideoWebcam:
 
     def read(self):
         current_frame = int((time.time() - self.start_timestamp) * self.fps) % self.video_length
-        return self.get_required_frame(current_frame)
+        return self.get_required_frame(target_frame=current_frame)
 
-    def get_required_frame(self, target_frame):
+    def get_required_frame(self, target_frame: int) -> tuple[bool, None | np.ndarray]:
         last_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
         # Calculate the number of frames to skip
         skip_frames = target_frame - last_frame
-        if skip_frames < 0:
-            skip_frames += self.video_length
+        if skip_frames < -1:
+            warn(f'Frame {target_frame} has already been read. Cannot read frame {target_frame} again.')
+            return False, None
 
-        # Use set method if more than 50 frames need to be skipped
-        if skip_frames > 50:
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
-            ret, frame = self.cap.read()
-        else:
-            # Use grab method to quickly skip the unnecessary frames
-            for _ in range(skip_frames - 1):
-                self.cap.grab()
 
-            # Retrieve the required frame
-            ret, frame = self.cap.retrieve()
+        # Use grab method to quickly skip the unnecessary frames
+        for _ in range(skip_frames - 1):
+            if not self.cap.grab():
+                return False, None
+
+        # Retrieve the required frame
+        ret, frame = self.cap.retrieve()
 
         return ret, frame
 
