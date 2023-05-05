@@ -9,14 +9,22 @@ Github: https://github.com/Eric-Canas
 Email: eric@ericcanas.com
 Date: 05-05-2023
 """
-
 from __future__ import annotations
 from imutils.video import WebcamVideoStream
+import time
 
 
 class _WebcamBackground(WebcamVideoStream):
     def __init__(self, src=0, name="WebcamVideoStream"):
         super().__init__(src=src, name=name)
+        time.sleep(0.25)  # Added delay
+
+    def update(self):
+        while True:
+            if self.stopped:
+                return
+            if self.stream.isOpened():  # Check if the stream is opened
+                (self.grabbed, self.frame) = self.stream.read()
 
     def read(self):
         frame = super().read()

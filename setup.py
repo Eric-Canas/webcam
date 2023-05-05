@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='webcam',
-    version='0.1',
+    version='0.4',
     author='Eric-Canas',
     author_email='eric@ericcanas.com',
     url='https://github.com/Eric-Canas/webcam',
@@ -15,7 +15,7 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'numpy',
-        'opencv-python-headless',
+        'opencv-python',
         'imutils'
     ],
 
@@ -30,7 +30,6 @@ setup(
         'Topic :: Multimedia :: Graphics :: Capture',
         'Topic :: Multimedia :: Graphics :: Capture :: Digital Camera',
         'Topic :: Multimedia :: Graphics :: Capture :: Screen Capture',
-        'Topic :: Multimedia :: Graphics :: Capture :: Video Capture',
         'Topic :: Software Development :: Libraries',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
