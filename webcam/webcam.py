@@ -1,5 +1,7 @@
 """
-WebcamReader is a wrapper for the cv2.VideoCapture class used to read frames from a webcam.
+webcam.py: Contains the Webcam class that provides an interface for reading frames from a webcam.
+The class allows specifying various parameters such as frame size, color format, batch size, and the maximum
+frame rate. It can also run in the background for faster frame reading.
 
 Author: Eric Canas
 Github: https://github.com/Eric-Canas
@@ -7,29 +9,26 @@ Email: eric@ericcanas.com
 Date: 04-03-2023
 """
 
+
 from __future__ import annotations
 import cv2
 import numpy as np
-from warnings import warn
 import time
 from typing import Tuple
 
-from vid2info.video.config import DEFAULT_VIDEO_FRAME_RATE
-from vid2info.video.utils import calculate_frame_size_keeping_aspect_ratio
-from vid2info.video._webcam_reader_multithread import _WebcamReaderMultithread
+from webcam._webcam_background import _WebcamBackground
 
 
-class WebcamReader:
+class Webcam:
     def __init__(
         self,
         webcam_src: int | str = 0,
         h: int | None = None,
         w: int | None = None,
-        always_maximize_aspect_ratio: bool = False,
         as_bgr: bool = True,
         batch_size: int | None = None,
         run_in_background: bool = True,
-        max_frame_rate: int | None = DEFAULT_VIDEO_FRAME_RATE,
+        max_frame_rate: int | None = 60,
     ):
         """
         Initialize the WebcamReader.
@@ -40,10 +39,10 @@ class WebcamReader:
         :param as_bgr: bool. If True, the frames will be returned in BGR format, otherwise in RGB format.
         :param batch_size: int or None. If not None, the iterator will yield batches of frames (B, H, W, C). If None, the iterator will yield single frames (H, W, C).
         :param run_in_background: bool. If True, the frames will be read in a background thread (speeding up the reading).
-        :param max_frame_rate: int or None. The maximum frame rate to read the frames at. If None, the maximum frame rate will be used.
+        :param max_frame_rate: int or None. The maximum frame rate to read the frames at. If None, there will be no limitations on frame rating.
         """
         self._background = run_in_background
-        self.cap = _WebcamReaderMultithread(src=webcam_src).start() if run_in_background else cv2.VideoCapture(webcam_src)
+        self.cap = _WebcamBackground(src=webcam_src).start() if run_in_background else cv2.VideoCapture(webcam_src)
         self.as_bgr = as_bgr
 
         # Calculate and set output frame size
@@ -237,7 +236,17 @@ class WebcamReader:
         :param w: int or None. Width of the frame. If None, h must be provided.
         :return: The height and width of the frame.
         """
-        return calculate_frame_size_keeping_aspect_ratio(original_h=self.h, original_w=self.w, new_h=h, new_w=w)
+
+
+        if h is None and w is not None:
+            h = int(round(self.h * w / self.w))
+        elif h is not None and w is None:
+            w = int(round(self.w * h / self.h))
+        else:
+            raise ValueError(f'Only one of the frame size dimensions must be provided.'
+                             f' Got h={h} and w={w}.')
+        assert h is not None and w is not None, f'Both h and w should have been calculated. Got h={h} and w={w}.'
+        return h, w
 
     def __iter__(self):
         return self
