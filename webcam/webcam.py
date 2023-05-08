@@ -26,19 +26,19 @@ CROP, RESIZE = 'crop', 'resize'
 class Webcam:
     def __init__(
         self,
-        webcam_src: int | str = 0,
+        src: int | str = 0,
         h: int | None = None,
         w: int | None = None,
         as_bgr: bool = False,
         batch_size: int | None = None,
         run_in_background: bool = False,
-        max_frame_rate: int | None = 60,
+        max_frame_rate: int | None = None,
         on_aspect_ratio_lost: str = CROP,
     ):
         """
         Initialize the WebcamReader.
 
-        :param webcam_src: int or str. The index of the webcam or its path.
+        :param src: int or str. The index of the webcam or its path.
         :param h: int or None. Desired height of the frames. If None and `_w` is provided, the aspect ratio will be preserved.
         :param w: int or None. Desired width of the frames. If None and `_h` is provided, the aspect ratio will be preserved.
         :param as_bgr: bool. If True, the frames will be returned in BGR format, otherwise in RGB format.
@@ -50,15 +50,12 @@ class Webcam:
                                                        f" Valid values are: {CROP}, {RESIZE}"
         self._background = run_in_background
         self.on_aspect_ratio_lost = on_aspect_ratio_lost
-        if run_in_background:
-            raise NotImplementedError("Background reading is not implemented yet.")
-            #self.cap = _WebcamBackground(src=webcam_src).start()
-        elif isinstance(webcam_src, str):
-            #TODO: Improve the check for video file
-            assert os.path.isfile(webcam_src), f"Video file not found: {webcam_src}"
-            self.cap = _VideoWebcam(video_path=webcam_src)
+        # Initialize it for videos if the source is a string and a file exists at the path
+        if isinstance(src, str) and os.path.isfile(src):
+            self.cap = _VideoWebcam(video_path=src)
+        # Otherwise assume it is a webcam (both webcam or RTSP stream)
         else:
-            self.cap = cv2.VideoCapture(webcam_src)
+            self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src)
         self.as_bgr = as_bgr
 
         # Calculate and set output frame size
@@ -306,3 +303,17 @@ class Webcam:
             self.stop()
         self.release()
         self.cap = None
+
+def get_rtsp_url(ip: str, username: str, password: str, port: int = 554, channel: int = 1, stream: int = 0) -> str:
+    """
+    Generate an RTSP URL for connecting to an IP camera.
+
+    :param ip: str. The IP address of the camera.
+    :param username: str. The username for accessing the camera.
+    :param password: str. The password for accessing the camera.
+    :param port: int. The RTSP port (default: 554).
+    :param channel: int. The camera channel (default: 1).
+    :param stream: int. The stream type (default: 0).
+    :return: str. The generated RTSP URL.
+    """
+    return f"rtsp://{username}:{password}@{ip}:{port}/cam/realmonitor?channel={channel}&subtype={stream}"

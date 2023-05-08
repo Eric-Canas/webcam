@@ -7,7 +7,7 @@ FRAMES_TO_READ = 500
 if __name__ == '__main__':
 
     # Instantiate a Webcam instance with the background parameter
-    webcam = Webcam(webcam_src=os.path.join('resources', 'test_video.mp4'), h=640, run_in_background=False)
+    webcam = Webcam(src=os.path.join('resources', 'test_video.mp4'), h=640, run_in_background=False)
 
     # Iteratively read FRAMES_TO_READ frames
     for i, frame in zip(range(FRAMES_TO_READ), webcam):

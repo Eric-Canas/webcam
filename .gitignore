@@ -18,3 +18,5 @@ venv.bak/
 .idea/
 
 webcam.egg-info/
+
+private_testing/
