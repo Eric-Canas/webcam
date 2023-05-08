@@ -55,7 +55,7 @@ class Webcam:
             self.cap = _VideoWebcam(video_path=src)
         # Otherwise assume it is a webcam (both webcam or RTSP stream)
         else:
-            self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src)
+            self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
         self.as_bgr = as_bgr
 
         # Calculate and set output frame size
