@@ -1,13 +1,13 @@
 # Webcam
 <img alt="webcam" title="webcam" src="https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/logo.png" width="20%" align="left"> **Webcam** is a simple, yet powerful Python library that brings advanced webcam handling to your projects. It offers numerous advantages over alternatives like [cv2.VideoCapture](https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#a57c0e81e83e60f36c83027dc2a188e80), making it a _go-to choice_ for developers seeking to enhance their webcam integration and usage.
 
-With **Webcam**, developers can easily access and manage video input from various sources like _webcams_, _IP cameras_, and _video files_. The library provides options to configure *frame sizes* and *cropping* or *resizing* behavior directly in the constructor, ensuring that all returned frames have the desired format. Additionally, **Webcam** provides a unique feature that allows users to simulate *webcam input* using _video files_, perfect for testing and development.
+**Webcam** provides developers with an intuitive way to handle video input from a range of sources like _webcams_, _IP cameras_, and _video files_. It grants you the power to dictate the exact _frame size_ and regulate _aspect ratio_ adjustments when the camera's native resolution doesn't match, thereby ensuring all returned frames comply with your format requirements. Additionally, **Webcam** provides a unique feature that allows users to simulate *webcam input* using _video files_, perfect for testing and development.
 
-Designed for **simplicity** and **user-friendliness**, **Webcam** provides advanced features without compromising **ease of use**. Allowing you to focus on building your application without getting bogged down by the intricacies of webcam management.
+Designed for **simplicity** and **user-friendliness**, **Webcam** provides advanced features without compromising **ease of use**. This allows you to channel your efforts into developing your application, instead of grappling with the complexities of webcam control.
 
 
 ## Advanced Functionality
-**Webcam** offers an extensive range of features, elevating basic webcam handling to a level of advanced, flexible control:
+**Webcam** showcases a rich set of features, advancing beyond fundamental webcam manipulation to offer a higher degree of control and flexibility:
 
 - **Enhanced Input Sources**: **Webcam** seamlessly handles all input types that [OpenCV](https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#a949d90b766ba42a6a93fe23a67785951) accepts, but with added versatility. Including _webcams_, _IP cameras_ (using RTSP URLs), and _video files_.
 
