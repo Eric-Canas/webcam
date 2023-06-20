@@ -20,6 +20,7 @@ import os
 
 from webcam._video_webcam import _VideoWebcam
 from webcam._webcam_background import _WebcamBackground
+from webcam._perspective_manager import _PerspectiveManager, _DummyPerspectiveManager
 
 CROP, RESIZE = 'crop', 'resize'
 
@@ -34,6 +35,8 @@ class Webcam:
         run_in_background: bool = False,
         max_frame_rate: int | None = None,
         on_aspect_ratio_lost: str = CROP,
+        homography_matrix: np.ndarray | list[list[float], ...] | None = None,
+        crop_on_warping: bool = True
     ):
         """
         Initialize the WebcamReader.
@@ -45,6 +48,11 @@ class Webcam:
         :param batch_size: int or None. If not None, the iterator will yield batches of frames (B, H, W, C). If None, the iterator will yield single frames (H, W, C).
         :param run_in_background: bool. If True, the frames will be read in a background thread (speeding up the reading).
         :param max_frame_rate: int or None. The maximum frame rate to read the frames at. If None, there will be no limitations on frame rating.
+        :param on_aspect_ratio_lost: str. What to do if the aspect ratio of the frames is different from the desired aspect ratio. Valid values are: 'crop' and 'resize'.
+        :param homography_matrix: np.ndarray or list[list[float], ...] or None. The homography matrix to warp the frames with.
+        If passed, frames will be warped before any other processing.
+        :param crop_on_warping: bool. Only applied when homography_matrix is given. Determines if there will be visible
+        black perspective boundaries, or if the image will be cropped to hide them. Default: True
         """
         assert on_aspect_ratio_lost in (CROP, RESIZE), f"Invalid value for `on_aspect_ratio_lost`: {on_aspect_ratio_lost}." \
                                                        f" Valid values are: {CROP}, {RESIZE}"
@@ -58,6 +66,14 @@ class Webcam:
             self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
         self.as_bgr = as_bgr
 
+        if homography_matrix is None:
+            self.perspective_manager = None
+        else:
+            self.perspective_manager = _PerspectiveManager(homography_matrix=homography_matrix,
+                                                          default_h=int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                                                          default_w=int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                                          crop_boundaries=crop_on_warping)
+
         # Calculate and set output frame size
         self.frame_size_hw = self._calculate_and_set_desired_resolution(h, w)
 
@@ -69,11 +85,22 @@ class Webcam:
 
     @property
     def _h(self) -> int:
-        return int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if self.perspective_manager is None:
+            return h
+        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        corrected_w, corrected_h = self.perspective_manager.after_warp_image_shape(w=w, h=h)
+        return corrected_h
 
     @property
     def _w(self) -> int:
-        return int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        if self.perspective_manager is None:
+            return w
+        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        corrected_w, corrected_h = self.perspective_manager.after_warp_image_shape(w=w, h=h)
+        return corrected_w
+
 
     @property
     def h(self) -> int:
@@ -214,11 +241,13 @@ class Webcam:
         current_h, current_w = frame.shape[:2]
         aspect_ratio = current_w / current_h
 
-        # Calculate the new dimensions such that the aspect ratio is preserved
-        if float(h) / w > aspect_ratio:
-            new_h, new_w = h, int(h * aspect_ratio)
+        # Calculate the new dimensions such that the smaller dimension matches the desired size
+        if current_h < current_w:
+            new_h = h
+            new_w = int(np.ceil(new_h * aspect_ratio))
         else:
-            new_w, new_h = w, int(w / aspect_ratio)
+            new_w = w
+            new_h = int(np.ceil(new_w / aspect_ratio))
 
         # Resize the frame to the new dimensions
         frame = cv2.resize(src=frame, dsize=(new_w, new_h))
@@ -241,9 +270,11 @@ class Webcam:
         ret, frame = self.cap.read()
 
         if ret:
-            # Extract the height and width of the frame
+            # Adjust the perspective (if needed). If homography matrix is not defined it will do nothing
+            if self.perspective_manager is not None:
+                frame = self.perspective_manager.warp(image=frame)
+            # Get the height and width of the frame
             h, w = frame.shape[:2]
-
             # Resize the frame if the webcam's returned frame size is different from the user-set size
             if (h, w) != (self.h, self.w):
                 frame = self._adjust_image_shape(frame=frame, h=self.h, w=self.w)
