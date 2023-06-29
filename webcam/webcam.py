@@ -95,7 +95,7 @@ class Webcam:
         if self.perspective_manager is None:
             return h
         w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        corrected_w, corrected_h = self.perspective_manager.after_warp_image_shape(w=w, h=h)
+        corrected_w, corrected_h = self.perspective_manager.calculate_output_shape(w=w, h=h)
         return corrected_h
 
     @property
@@ -104,7 +104,7 @@ class Webcam:
         if self.perspective_manager is None:
             return w
         h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        corrected_w, corrected_h = self.perspective_manager.after_warp_image_shape(w=w, h=h)
+        corrected_w, corrected_h = self.perspective_manager.calculate_output_shape(w=w, h=h)
         return corrected_w
 
 
@@ -346,8 +346,9 @@ class Webcam:
             input_h, input_w = self._h, self._w
 
         # Calculate the pixel magnification for each axis when adjusting size
-        magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h, input_w, magnification_h,
-                                                                                      magnification_w)
+        magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h=input_h, input_w=input_w,
+                                                                                      pre_magnification_h=magnification_h,
+                                                                                      pre_magnification_w=magnification_w)
 
         # Return the magnification of the pixel at (x, y)
         return magnification_h, magnification_w

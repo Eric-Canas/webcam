@@ -32,25 +32,40 @@ class _PerspectiveManager:
 
     @property
     def output_w(self) -> int:
-        w, h = self.after_warp_image_shape(w=self.default_w, h=self.default_h)
+        w, h = self.calculate_output_shape(w=self.default_w, h=self.default_h)
         return w
 
     @property
     def output_h(self) -> int:
-        w, h = self.after_warp_image_shape(w=self.default_w, h=self.default_h)
+        w, h = self.calculate_output_shape(w=self.default_w, h=self.default_h)
         return h
 
-    @lru_cache(maxsize=32)
-    def __build_corners(self, w: float|int, h: float|int):
-        assert w == self.default_w and h == self.default_h, \
-            f'By the moment, that is assumed that h and w are kept since the initialization. ' \
-            f'Changing them could lead to unexpected results. '
-        w, h = float(w), float(h)
-        return np.array(((0., 0.), (w - 1., 0.), (w - 1., h - 1.), (0., h - 1.)), dtype=np.float32)
+    def warp(self, image: np.ndarray) -> np.ndarray:
+        """
+        Warp the image to generate the required perspective correction
+        :param image: np.ndarray. Image to warp
+        :return: np.ndarray. The output warped image
+        """
+        h, w = image.shape[:2]
+        w_after_warp, h_after_warp = self.calculate_output_shape(w=w, h=h, cropping_boundaries=False)
+
+        warped_image = cv2.warpPerspective(
+            src=image,
+            M=self.homography_matrix,
+            dsize=(w_after_warp, h_after_warp),
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=self.boundaries_color
+        )
+
+        if self.crop_boundaries:
+            x_min, y_min, x_max, y_max = self.__get_crop_bbox_xyxy(h=h, w=w)
+            warped_image = warped_image[y_min:y_max, x_min:x_max]
+
+        return warped_image
 
     # Cache this function as most of times it will be always called with the same arguments
     @lru_cache(maxsize=16)
-    def after_warp_image_shape(self, w: int, h: int, cropping_boundaries: bool | None = None) -> tuple[int, int]:
+    def calculate_output_shape(self, w: int, h: int, cropping_boundaries: bool | None = None) -> tuple[int, int]:
         """
         Gets the new width and height that an image with width w, and height w will have after warping.
         It will depend on the defined self.homography_matrix and the value of cropping_boundaries.
@@ -76,78 +91,6 @@ class _PerspectiveManager:
         w_after_warp = int(np.ceil(np.max(x_coords)) - np.floor(np.min(x_coords)))
         h_after_warp = int(np.ceil(np.max(y_coords)) - np.floor(np.min(y_coords)))
         return w_after_warp, h_after_warp
-
-    def warp(self, image: np.ndarray) -> np.ndarray:
-        """
-        Warp the image to generate the required perspective correction
-        :param image: np.ndarray. Image to warp
-        :return: np.ndarray. The output warped image
-        """
-        h, w = image.shape[:2]
-        w_after_warp, h_after_warp = self.after_warp_image_shape(w=w, h=h, cropping_boundaries=False)
-
-        warped_image = cv2.warpPerspective(
-            src=image,
-            M=self.homography_matrix,
-            dsize=(w_after_warp, h_after_warp),
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=self.boundaries_color
-        )
-
-        if self.crop_boundaries:
-            warped_corners = self.__output_corners(w=w, h=h)
-            # Keep only the second and third x coords, as they are the left and right limits
-            x_min, x_max = np.sort(warped_corners[:, 0])[1:-1]
-            # Keep only the second and third y coords, as they are the top and bottom limits
-            y_min, y_max = np.sort(warped_corners[:, 1])[1:-1]
-            x_min, x_max = int(np.floor(x_min)), int(np.ceil(x_max))
-            y_min, y_max = int(np.floor(y_min)), int(np.ceil(y_max))
-
-            assert y_min >= 0 and x_min >=0, f"Cropping coords can't be negatives. Got x={x_min}, y={y_max}"
-            assert y_max > y_min and x_max > x_min, f"x_max and y_max must be larger than x_min and y_min."\
-                                                    f"Got x_min={x_min}, x_max={x_max}, y_min={y_min} and y_max={y_max}"
-
-            warped_image = warped_image[y_min:y_max, x_min:x_max]
-
-        return warped_image
-
-    @lru_cache(maxsize=16)
-    def __output_corners(self, w: int, h: int) -> np.ndarray:
-        """
-        Get the corners of the output image after warping an image with width w and height h.
-        :param w: int. The width of the input image
-        :param h: int. The height of the input image
-        :return: np.ndarray. The corners of the output image after warping an image with width w and height h.
-        """
-        # Calculate the positions for each one of the four corners determined by w and h
-        corners = self.__build_corners(w=w, h=h)
-        # Get the new position for the four image corners
-        warped_corners = cv2.perspectiveTransform(corners[None, ...], self.homography_matrix)[0]
-        assert np.isclose(np.min(warped_corners), 0., atol=1e-3), f"Minimum warped corner should be 0. Got {np.min(warped_corners)}"
-        return np.clip(warped_corners, a_min=0., a_max=None)
-
-    def __apply_non_negative_translation_to_homography_matrix(self, m: np.ndarray, w: int, h: int) -> np.ndarray:
-        """
-        Apply a translation to the given homography matrix to ensure that the minimum x and y coordinates
-        are at (0,0) after transformation.
-        :param m: np.ndarray. The matrix to be translated.
-        :return: np.ndarray. The translated matrix.
-        """
-        corners = self.__build_corners(w=w, h=h)
-        # Get the new position for the four image corners
-        warped_corners = cv2.perspectiveTransform(corners[None, ...], m)[0]
-
-        # Get the minimum x and y coordinates
-        x_min = np.min(warped_corners[:, 0])
-        y_min = np.min(warped_corners[:, 1])
-
-        # Create a translation matrix to move the minimum x and y coordinates to (0,0)
-        translation_matrix = np.array(((1., 0., -x_min), (0., 1., -y_min), (0., 0., 1.)), dtype=np.float32)
-
-        # Combine the original matrix with the translation matrix
-        combined_matrix = np.dot(a=translation_matrix, b=m)
-
-        return combined_matrix
 
 
     # ------------------------------ CALCULATE MAGNIFICATION FACTOR ------------------------------
@@ -263,9 +206,90 @@ class _PerspectiveManager:
         n_points, coords = points_xy.shape
         assert coords == 2, f"Expected 2 coordinates per point, but got {coords}."
 
+        if self.crop_boundaries:
+            x_min, y_min, x_max, y_max = self.__get_crop_bbox_xyxy(h=self.default_h, w=self.default_w)
+            points_xy += (x_min, y_min)
         # Transform the line back to the input space using the inverse homography matrix
         points_transformed = np.dot(self.inverse_homography_matrix, np.c_[points_xy, np.ones(n_points)].T)
         points_transformed /= points_transformed[2]
         points_transformed = points_transformed[:2].T
 
         return points_transformed
+
+
+    # ------------------------------- AUXILIARY METHODS -------------------------------
+
+    def __apply_non_negative_translation_to_homography_matrix(self, m: np.ndarray, w: int, h: int) -> np.ndarray:
+        """
+        Apply a translation to the given homography matrix to ensure that the minimum x and y coordinates
+        are at (0,0) after transformation.
+        :param m: np.ndarray. The matrix to be translated.
+        :return: np.ndarray. The translated matrix.
+        """
+        corners = self.__build_corners(w=w, h=h)
+        # Get the new position for the four image corners
+        warped_corners = cv2.perspectiveTransform(corners[None, ...], m)[0]
+
+        # Get the minimum x and y coordinates
+        x_min = np.min(warped_corners[:, 0])
+        y_min = np.min(warped_corners[:, 1])
+
+        # Create a translation matrix to move the minimum x and y coordinates to (0,0)
+        translation_matrix = np.array(((1., 0., -x_min), (0., 1., -y_min), (0., 0., 1.)), dtype=np.float32)
+
+        # Combine the original matrix with the translation matrix
+        combined_matrix = np.dot(a=translation_matrix, b=m)
+
+        return combined_matrix
+
+    @lru_cache(maxsize=16)
+    def __get_crop_bbox_xyxy(self, h: int | float, w: int | float,
+                             return_as_int: bool = True) -> tuple[int|float, int|float, int|float, int|float]:
+        """
+        Get the bounding box of the warped image that excludes the black borders. The returned bounding box is in the
+        format x_min, y_min, x_max, y_max.
+        :param h: int|float. Height of the image.
+        :param w: int|float. Width of the image.
+        :param return_as_int: bool. Whether to return the bounding box as integers or floats. Default: True. Set to
+        False if you want subpixel precision.
+        :return: tuple[int, int, int, int]. The bounding box of the warped image that excludes the black borders.
+        """
+        warped_corners = self.__output_corners(w=w, h=h)
+        # Keep only the second and third x coords, as they are the left and right limits
+        x_min, x_max = np.sort(warped_corners[:, 0])[1:-1]
+        # Keep only the second and third y coords, as they are the top and bottom limits
+        y_min, y_max = np.sort(warped_corners[:, 1])[1:-1]
+        if return_as_int:
+            x_min, x_max = int(np.floor(x_min)), int(np.ceil(x_max))
+            y_min, y_max = int(np.floor(y_min)), int(np.ceil(y_max))
+        assert y_min >= 0 and x_min >= 0, f"Cropping coords can't be negatives. Got x={x_min}, y={y_max}"
+        assert y_max > y_min and x_max > x_min, f"x_max and y_max must be larger than x_min and y_min." \
+                                                f"Got x_min={x_min}, x_max={x_max}, y_min={y_min} and y_max={y_max}"
+        return x_min, y_min, x_max, y_max
+
+    @lru_cache(maxsize=16)
+    def __output_corners(self, w: int, h: int) -> np.ndarray:
+        """
+        Get the corners of the output image after warping an image with width w and height h.
+        :param w: int. The width of the input image
+        :param h: int. The height of the input image
+        :return: np.ndarray. The corners of the output image after warping an image with width w and height h.
+        """
+        # Calculate the positions for each one of the four corners determined by w and h
+        corners = self.__build_corners(w=w, h=h)
+        # Get the new position for the four image corners
+        warped_corners = cv2.perspectiveTransform(corners[None, ...], self.homography_matrix)[0]
+        assert np.isclose(np.min(warped_corners), 0., atol=1e-3), f"Minimum warped corner should be 0. Got {np.min(warped_corners)}"
+        return np.clip(warped_corners, a_min=0., a_max=None)
+
+    @lru_cache(maxsize=32)
+    def __build_corners(self, w: float | int, h: float | int) -> np.ndarray:
+        """
+        Build the corners of the image as a numpy array of shape (4, 2). In the format x1y1, x2y2, x3y3, x4y4.
+        :param w: int|float. Width of the image.
+        :param h: int|float. Height of the image.
+        :return: np.ndarray. The corners of the image, as float32. Shape (4, 2). Format x1y1, x2y2, x3y3, x4y4.
+        """
+        w, h = float(w), float(h)
+        return np.array(((0., 0.), (w - 1., 0.), (w - 1., h - 1.), (0., h - 1.)), dtype=np.float32)
+
