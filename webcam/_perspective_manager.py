@@ -160,28 +160,31 @@ class _PerspectiveManager:
         if space == OUTPUT:
             xyxy_line = self.output_space_points_to_input_space(points_xy=xyxy_line)
 
-        # Transform the line using homography matrix
-        line_transformed = np.dot(self.homography_matrix, np.c_[xyxy_line, np.ones(2)].T)
-        line_transformed /= line_transformed[2]
+        # Calculate the center and length of the line
+        line_center = np.mean(xyxy_line, axis=0)
+        line_length = np.linalg.norm(xyxy_line[1] - xyxy_line[0])
 
-        # Calculate the lengths in x and y directions separately for the original and transformed lines
-        #dx_original, dy_original = np.abs(xyxy_line[1] - xyxy_line[0])
-        #dx_transformed, dy_transformed = np.abs(np.diff(line_transformed[:2], axis=1).squeeze())
+        # Define the square that circumscribes the line, centered at line's center and with side = line_length
+        half_len = line_length / 2
+        xyxy_square = np.array([
+            [line_center[0] - half_len, line_center[1] - half_len],  # bottom-left
+            [line_center[0] + half_len, line_center[1] - half_len],  # bottom-right
+            [line_center[0] + half_len, line_center[1] + half_len],  # top-right
+            [line_center[0] - half_len, line_center[1] + half_len]  # top-left
+        ])
 
-        # Calculate the magnification in x and y directions separately
-        #magnification_w = dx_transformed / dx_original if dx_original != 0 else 1.0
-        #magnification_h = dy_transformed / dy_original if dy_original != 0 else 1.0
+        # Transform the square using homography matrix
+        square_transformed = np.dot(self.homography_matrix, np.vstack([xyxy_square.T, np.ones(4)]))
+        square_transformed /= square_transformed[2]
 
-        # TODO: We are calculating the magnification for the whole line, because h,w magnification becomes buggy when
-        #  lines are too horizontal or vertical. We should find a way to fix that.
-        # Calculate the lengths for the original and transformed lines
-        len_original = np.sqrt(np.sum((xyxy_line[1] - xyxy_line[0]) ** 2))
-        len_transformed = np.sqrt(np.sum(np.diff(line_transformed[:2], axis=1).squeeze() ** 2))
+        # Find the width and height of the transformed square
+        w_transformed, h_transformed = np.ptp(square_transformed[:2], axis=1)
 
-        # Calculate the magnification
-        magnification = len_transformed / len_original if len_original != 0 else 1.0
+        # Calculate the magnifications in width and height
+        magnification_w = w_transformed / line_length
+        magnification_h = h_transformed / line_length
 
-        return magnification, magnification
+        return magnification_h, magnification_w
 
 
     def output_space_points_to_input_space(
