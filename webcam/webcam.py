@@ -46,8 +46,8 @@ class Webcam:
         Initialize the WebcamReader.
 
         :param src: int or str. The index of the webcam or its path.
-        :param h: int or None. Desired height of the frames. If None and `_w` is provided, the aspect ratio will be preserved.
-        :param w: int or None. Desired width of the frames. If None and `_h` is provided, the aspect ratio will be preserved.
+        :param h: int or None. Desired height of the frames. If None and `_input_w` is provided, the aspect ratio will be preserved.
+        :param w: int or None. Desired width of the frames. If None and `_input_h` is provided, the aspect ratio will be preserved.
         :param as_bgr: bool. If True, the frames will be returned in BGR format, otherwise in RGB format.
         :param batch_size: int or None. If not None, the iterator will yield batches of frames (B, H, W, C). If None, the iterator will yield single frames (H, W, C).
         :param run_in_background: bool. If True, the frames will be read in a background thread (speeding up the reading).
@@ -74,8 +74,8 @@ class Webcam:
             self.perspective_manager = None
         else:
             self.perspective_manager = _PerspectiveManager(homography_matrix=homography_matrix,
-                                                          default_h=int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                                                          default_w=int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                                          default_h=self._input_h,
+                                                          default_w=self._input_w,
                                                           crop_boundaries=crop_on_warping)
 
         # Calculate and set output frame size
@@ -90,23 +90,24 @@ class Webcam:
 
 
     @property
-    def _h(self) -> int:
-        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        if self.perspective_manager is None:
-            return h
-        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        corrected_w, corrected_h = self.perspective_manager.calculate_output_shape(w=w, h=h)
-        return corrected_h
+    def _input_h(self) -> int:
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     @property
-    def _w(self) -> int:
-        w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        if self.perspective_manager is None:
-            return w
-        h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        corrected_w, corrected_h = self.perspective_manager.calculate_output_shape(w=w, h=h)
-        return corrected_w
+    def _input_w(self) -> int:
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 
+    @property
+    def __pre_resize_w(self) -> int:
+        if self.perspective_manager is None:
+            return self._input_w
+        return self.perspective_manager.output_w
+
+    @property
+    def __pre_resize_h(self) -> int:
+        if self.perspective_manager is None:
+            return self._input_h
+        return self.perspective_manager.output_h
 
     @property
     def h(self) -> int:
@@ -170,32 +171,6 @@ class Webcam:
             yield self.read_next_frame()
         raise StopIteration
 
-    def _calculate_and_set_desired_resolution(self, h: int | None = None, w: int | None = None) -> tuple[int, int]:
-        """
-        Calculate and set the optimal webcam resolution based on the desired width and height.
-        The resolution will only change if the new resolution is natively supported by the webcam
-        and maintains the maximum available aspect ratio.
-
-        :param h: int or None. Desired height of the frames.
-        :param w: int or None. Desired width of the frames.
-        :return: tuple. The final frame size (height, width).
-        """
-        # Set webcam to its maximum supported resolution
-        max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
-
-        if h is None and w is None:
-            return max_h, max_w
-
-        # Calculate the missing dimension while keeping the aspect ratio if only one dimension is provided
-        if h is None or w is None:
-            h, w = self.calculate_frame_size_keeping_aspect_ratio(h=h, w=w)
-
-        # Change the resolution if supported (and keeps the maximum aspect ratio if only one dimension was provided)
-        if self._is_resolution_natively_supported(h=h, w=w):
-            self._set_webcam_resolution(h=h, w=w)
-
-        return h, w
-
     def _set_webcam_resolution(self, h: int, w: int) -> Tuple[int, int]:
         """
         Set the webcam resolution to the specified height and width and return the actual frame size set by the webcam.
@@ -204,13 +179,23 @@ class Webcam:
         :param w: int. Desired width of the frames.
         :return: tuple. The final frame size (height, width) after attempting to set the desired resolution.
         """
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
 
-        return self._h, self._w
+        # Set the webcam resolution
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+        # Get the actual resolution set by the webcam
+        return self._input_h, self._input_w
 
     def _is_resolution_natively_supported(self, h: int, w: int):
-        current_h, current_w = self._h, self._w
+        """
+        Check if the webcam supports the specified resolution natively.
+        :param h: int. Desired height of the frames.
+        :param w: int. Desired width of the frames.
+        :return: bool. True if the webcam supports the specified resolution natively.
+        """
+        assert isinstance(h, int) and isinstance(w, int), f"Invalid resolution: {h}x{w}. Expected integers. " \
+                                                          f"Got {type(h)}x{type(w)}."
+        current_h, current_w = self._input_h, self._input_w
         supported_h, supported_w = self._set_webcam_resolution(h=h, w=w)
         new_h, new_w = self._set_webcam_resolution(h=current_h, w=current_w)
         assert new_h == current_h and new_w == current_w, f"Webcam resolution could not be restored to {current_h}x{current_w}."
@@ -223,7 +208,7 @@ class Webcam:
         :return: tuple. The maximum allowed webcam resolution (height, width).
         """
         # Store the current resolution
-        current_h, current_w = self._h, self._w
+        current_h, current_w = self._input_h, self._input_w
 
         # Set the webcam resolution to an extremely high value and get the resulting maximum allowed resolution
         max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
@@ -335,15 +320,14 @@ class Webcam:
 
         # Calculate the homography magnification if appliable
         if self.perspective_manager is not None:
-            x = self._w // 2 if x is None else x
-            y = self._h // 2 if y is None else y
-
+            x = self.__pre_resize_w // 2 if x is None else x
+            y = self.__pre_resize_h // 2 if y is None else y
             magnification_h, magnification_w = self.perspective_manager.get_hw_magnification_at_point(x=x, y=y)
-            input_h, input_w = self.perspective_manager.output_h, self.perspective_manager.output_w
         # Or use the default magnification
         else:
             magnification_h, magnification_w = 1.0, 1.0
-            input_h, input_w = self._h, self._w
+
+        input_h, input_w = self.__pre_resize_h, self.__pre_resize_w
 
         # Calculate the pixel magnification for each axis when adjusting size
         magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h=input_h, input_w=input_w,
@@ -368,15 +352,13 @@ class Webcam:
 
         # Calculate the homography magnification if appliable
         if self.perspective_manager is not None:
-            magnification_h, magnification_w = self.perspective_manager.get_hw_magnification_for_line(xyxy_line=line_xyxy,
-                                                                                                      space=INPUT)
-            input_h, input_w = self.perspective_manager.output_h, self.perspective_manager.output_w
+            magnification_h, magnification_w = self.perspective_manager.get_hw_magnification_for_line(xyxy_line=line_xyxy, space=INPUT)
         # Or use the default magnification
         else:
             magnification_h, magnification_w = 1.0, 1.0
-            input_h, input_w = self._h, self._w
 
-        magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h=input_h, input_w=input_w,
+        magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h=self.__pre_resize_h,
+                                                                                      input_w=self.__pre_resize_w,
                                                                                       pre_magnification_h=magnification_h,
                                                                                       pre_magnification_w=magnification_w)
 
@@ -385,25 +367,52 @@ class Webcam:
 
 
     # --------------- AUXILIARY METHODS ---------------
-    def calculate_frame_size_keeping_aspect_ratio(self, h:int | None, w:int|None) -> tuple[int, int]:
+    def _calculate_frame_size_keeping_aspect_ratio(self, h: int | None, w: int | None) -> tuple[int, int]:
         """
         When only one of the frame size dimensions is given, the other one is calculated keeping the
         aspect ratio with the original video.
 
-        :param h: int or None. Height of the frame. If None, _w must be provided.
-        :param w: int or None. Width of the frame. If None, _h must be provided.
+        :param h: int or None. Height of the frame. If None, _input_w must be provided.
+        :param w: int or None. Width of the frame. If None, _input_h must be provided.
         :return: The height and width of the frame.
         """
 
         if h is None and w is not None:
-            h = int(round(self._h * w / self._w))
+            h = int(round(self.__pre_resize_h * w / self.__pre_resize_w))
         elif h is not None and w is None:
-            w = int(round(self._w * h / self._h))
+            w = int(round(self.__pre_resize_w * h / self.__pre_resize_h))
         else:
             raise ValueError(f'Only one of the frame size dimensions must be provided.'
-                             f' Got _h={h} and _w={w}.')
-        assert h is not None and w is not None, f'Both _h and _w should have been calculated. Got _h={h} and _w={w}.'
+                             f' Got _input_h={h} and _input_w={w}.')
+        assert h is not None and w is not None, f'Both _input_h and _input_w should have been calculated. Got _input_h={h} and _input_w={w}.'
         return h, w
+
+    def _calculate_and_set_desired_resolution(self, h: int | None = None, w: int | None = None) -> tuple[int, int]:
+        """
+        Calculate and set the optimal webcam resolution based on the desired width and height.
+        The resolution will only change if the new resolution is natively supported by the webcam
+        and maintains the maximum available aspect ratio.
+
+        :param h: int or None. Desired height of the frames.
+        :param w: int or None. Desired width of the frames.
+        :return: tuple. The final frame size (height, width).
+        """
+        # Set webcam to its maximum supported resolution
+        max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
+
+        if h is None and w is None:
+            return max_h, max_w
+
+        # Calculate the missing dimension while keeping the aspect ratio if only one dimension is provided
+        if h is None or w is None:
+            h, w = self._calculate_frame_size_keeping_aspect_ratio(h=h, w=w)
+
+        # Change the resolution if supported (and keeps the maximum aspect ratio if only one dimension was provided)
+        if self._is_resolution_natively_supported(h=h, w=w):
+            self._set_webcam_resolution(h=h, w=w)
+
+        return h, w
+
 
     @lru_cache(maxsize=64)
     def __calculate_resizing_magnification_hw(self, input_h: int, input_w: int, pre_magnification_h: float = 1.0,
@@ -429,6 +438,9 @@ class Webcam:
                              f" Valid values are '{RESIZE}' and '{CROP}'.")
 
         return magnification_h, magnification_w
+
+
+    # -------------------------- REVERSE TRANSFORMATIONS --------------------------
 
     def output_space_points_to_input_space(self, points_xy: np.ndarray | tuple[float | int, ...] | list[float | int, ...]) ->\
             np.ndarray:
@@ -511,6 +523,8 @@ class Webcam:
         points_xy[:, 1] += y1
 
         return points_xy
+
+# -------------------------- BUILT-IN METHODS --------------------------
 
     def __iter__(self):
         return self
