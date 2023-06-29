@@ -11,6 +11,9 @@ Date: 04-03-2023
 
 
 from __future__ import annotations
+
+from functools import lru_cache
+
 import cv2
 import numpy as np
 import time
@@ -20,9 +23,10 @@ import os
 
 from webcam._video_webcam import _VideoWebcam
 from webcam._webcam_background import _WebcamBackground
-from webcam._perspective_manager import _PerspectiveManager, _DummyPerspectiveManager
+from webcam._perspective_manager import _PerspectiveManager
 
 CROP, RESIZE = 'crop', 'resize'
+INPUT, OUTPUT = 'input', 'output'
 
 class Webcam:
     def __init__(
@@ -75,13 +79,15 @@ class Webcam:
                                                           crop_boundaries=crop_on_warping)
 
         # Calculate and set output frame size
-        self.frame_size_hw = self._calculate_and_set_desired_resolution(h, w)
+        self.frame_size_hw = self._calculate_and_set_desired_resolution(h=h, w=w)
 
         # Set batch size and frame rate attributes
         self.batch_size = batch_size
         self.start_timestamp = time.time()
         self.max_frame_rate = max_frame_rate
         self.last_frame_timestamp = self.start_timestamp
+
+
 
     @property
     def _h(self) -> int:
@@ -109,6 +115,21 @@ class Webcam:
     @property
     def w(self) -> int:
         return self.frame_size_hw[1]
+
+    @property
+    def pixel_magnification(self) -> float:
+        m_h, m_w = self.get_magnification_hw(x=None, y=None)
+        return (m_h + m_w) / 2
+
+    @property
+    def pixel_magnification_h(self) -> float:
+        m_h, m_w = self.get_magnification_hw(x=None, y=None)
+        return m_h
+
+    @property
+    def pixel_magnification_w(self) -> float:
+        m_h, m_w = self.get_magnification_hw(x=None, y=None)
+        return m_w
 
     @property
     def current_timestamp_seconds(self):
@@ -259,7 +280,7 @@ class Webcam:
         # Crop the frame
         return frame[y1:y2, x1:x2]
 
-    def read(self) -> tuple[bool, np.ndarray|None]:
+    def read(self, transform: bool = True) -> tuple[bool, np.ndarray|None]:
         """
         Read a frame from the webcam.
 
@@ -269,7 +290,7 @@ class Webcam:
         """
         ret, frame = self.cap.read()
 
-        if ret:
+        if ret and transform:
             # Adjust the perspective (if needed). If homography matrix is not defined it will do nothing
             if self.perspective_manager is not None:
                 frame = self.perspective_manager.warp(image=frame)
@@ -279,9 +300,9 @@ class Webcam:
             if (h, w) != (self.h, self.w):
                 frame = self._adjust_image_shape(frame=frame, h=self.h, w=self.w)
 
-            # Convert the frame from BGR to RGB format if necessary
-            if not self.as_bgr:
-                cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB, dst=frame)
+        # Convert the frame from BGR to RGB format if necessary
+        if ret and not self.as_bgr:
+            cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB, dst=frame)
 
         return ret, frame
 
@@ -300,6 +321,68 @@ class Webcam:
     def isOpened(self):
         return self.cap.isOpened()
 
+
+    @lru_cache(maxsize=64)
+    def get_magnification_hw(self, x: int | float | None = None, y: int | float | None = None) -> float:
+        """
+        Calculate the magnification of the pixel at (x, y). If x and y are not given, the magnification of the
+        center pixel is calculated. (x, y) coordinates are only relevant if the perspective is adjusted.
+
+        :param x: int or float or None. The x coordinate of the pixel.
+        :param y: int or float or None. The y coordinate of the pixel.
+        :return: float. The magnification of the pixel at (x, y).
+        """
+
+        # Calculate the homography magnification if appliable
+        if self.perspective_manager is not None:
+            x = self._w // 2 if x is None else x
+            y = self._h // 2 if y is None else y
+
+            magnification_h, magnification_w = self.perspective_manager.get_hw_magnification_at_point(x=x, y=y)
+            input_h, input_w = self.perspective_manager.output_h, self.perspective_manager.output_w
+        # Or use the default magnification
+        else:
+            magnification_h, magnification_w = 1.0, 1.0
+            input_h, input_w = self._h, self._w
+
+        # Calculate the pixel magnification for each axis when adjusting size
+        magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h, input_w, magnification_h,
+                                                                                      magnification_w)
+
+        # Return the magnification of the pixel at (x, y)
+        return magnification_h, magnification_w
+
+    def get_line_hw_magnification(self, line_xyxy: np.ndarray | tuple[int|float, int|float, int|float, int|float],
+                                  space: str = OUTPUT) \
+            -> tuple[float, float]:
+        """
+        Get the magnification factor for the given line. It allows to take precise measurements on the image, without
+        having to worry about the perspective distortion, aspect ratio modifications or resizing.
+        :param line_xyxy: tuple. The line to measure, in the format (x1, y1, x2, y2).
+        :param space: str. The space in which the line is defined. It can be either INPUT or OUTPUT.
+        :return: tuple. The magnification factor for the line.
+        """
+        if space == OUTPUT:
+            line_xyxy = self.output_space_points_to_input_space(points_xy=line_xyxy)
+
+        # Calculate the homography magnification if appliable
+        if self.perspective_manager is not None:
+            magnification_h, magnification_w = self.perspective_manager.get_hw_magnification_for_line(xyxy_line=line_xyxy,
+                                                                                                      space=INPUT)
+            input_h, input_w = self.perspective_manager.output_h, self.perspective_manager.output_w
+        # Or use the default magnification
+        else:
+            magnification_h, magnification_w = 1.0, 1.0
+            input_h, input_w = self._h, self._w
+
+        magnification_h, magnification_w = self.__calculate_resizing_magnification_hw(input_h=input_h, input_w=input_w,
+                                                                                      pre_magnification_h=magnification_h,
+                                                                                      pre_magnification_w=magnification_w)
+
+        return magnification_h, magnification_w
+
+
+
     # --------------- AUXILIARY METHODS ---------------
     def calculate_frame_size_keeping_aspect_ratio(self, h:int | None, w:int|None) -> tuple[int, int]:
         """
@@ -311,7 +394,6 @@ class Webcam:
         :return: The height and width of the frame.
         """
 
-
         if h is None and w is not None:
             h = int(round(self._h * w / self._w))
         elif h is not None and w is None:
@@ -321,6 +403,113 @@ class Webcam:
                              f' Got _h={h} and _w={w}.')
         assert h is not None and w is not None, f'Both _h and _w should have been calculated. Got _h={h} and _w={w}.'
         return h, w
+
+    @lru_cache(maxsize=64)
+    def __calculate_resizing_magnification_hw(self, input_h: int, input_w: int, pre_magnification_h: float = 1.0,
+                                              pre_magnification_w: float = 1.0) -> tuple[float, float]:
+        """
+        Calculate the pixel magnification for each axis when adjusting size
+        :param input_h: int. The input height.
+        :param input_w: int. The input width.
+        :param pre_magnification_h: float. The previous magnification in height. Default is 1.0.
+        :param pre_magnification_w: float. The previous magnification in width. Default is 1.0.
+        :return: tuple[float, float]. The updated magnification in height and width.
+        """
+        if self.on_aspect_ratio_lost == RESIZE:
+            magnification_h = pre_magnification_h * (self.h / input_h)
+            magnification_w = pre_magnification_w * (self.w / input_w)
+
+        elif self.on_aspect_ratio_lost == CROP:
+            resize_ratio = self.h / input_h if input_h < input_w else self.w / input_w
+            magnification_h = pre_magnification_h * resize_ratio
+            magnification_w = pre_magnification_w * resize_ratio
+        else:
+            raise ValueError(f"Invalid value for 'on_aspect_ratio_lost' parameter: {self.on_aspect_ratio_lost}."
+                             f" Valid values are '{RESIZE}' and '{CROP}'.")
+
+        return magnification_h, magnification_w
+
+    def output_space_points_to_input_space(self, points_xy: np.ndarray | tuple[float | int, ...] | list[float | int, ...]) ->\
+            np.ndarray:
+        """
+        Transform the given points from output space to input space.
+
+        :param points_xy: np.ndarray. Points to be transformed. It has shape (N, 2), where N is the number of points.
+        :return: np.ndarray. The transformed points. It has shape (N, 2).
+        """
+        if isinstance(points_xy, (tuple, list)):
+            points_xy = np.array(points_xy, dtype=np.float32)
+        assert isinstance(points_xy, np.ndarray), "Line must be either a tuple or a numpy array."
+        points_xy = points_xy.reshape(-1, 2)
+
+        if self.on_aspect_ratio_lost == RESIZE:
+            points_xy = self.__rollback_resize_for_points(points_xy=points_xy)
+        elif self.on_aspect_ratio_lost == CROP:
+            points_xy = self.__rollback_crop_for_points(points_xy=points_xy)
+        else:
+            raise ValueError(f"Invalid value for 'on_aspect_ratio_lost' parameter: {self.on_aspect_ratio_lost}. "
+                             f"Valid values are: {RESIZE}, {CROP}.")
+
+        # Undo the homography transformation using the Perspective Manager's method
+        points_transformed = self.perspective_manager.output_space_points_to_input_space(points_xy=points_xy)
+
+        return points_transformed
+
+    def __rollback_resize_for_points(self, points_xy: np.ndarray) -> np.ndarray:
+        """
+        Rollback the resize transformation.
+
+        :param points_xy: np.ndarray. Points to be transformed. It has shape (N, 2), where N is the number of points.
+        :return: np.ndarray. The transformed points. It has shape (N, 2).
+        """
+        scale_x = self.perspective_manager.output_w / self.w
+        scale_y = self.perspective_manager.output_h / self.h
+
+        points_xy[:, 0] *= scale_x
+        points_xy[:, 1] *= scale_y
+
+        return points_xy
+
+    def __rollback_crop_for_points(self, points_xy: np.ndarray) -> np.ndarray:
+        """
+        Rollback the crop transformation.
+
+        :param points_xy: np.ndarray. Points to be transformed. It has shape (N, 2), where N is the number of points.
+        :return: np.ndarray. The transformed points. It has shape (N, 2).
+        """
+        # The input dimensions that the crop received (the output of the warping
+        input_h, input_w = self.perspective_manager.output_h, self.perspective_manager.output_w
+        # The output dimensions that the crop should produce
+        output_h, output_w = self.h, self.w
+
+        aspect_ratio = input_w / input_h
+
+        # Calculate the intermediate dimensions that the crop should produce (dimensions to resize before cropping)
+        if input_h < input_w:
+            new_h = output_h
+            new_w = int(np.ceil(new_h * aspect_ratio))
+        else:
+            new_w = output_w
+            new_h = int(np.ceil(new_w / aspect_ratio))
+
+        # Calculate the scale factor of the resize
+        scale_x = new_w / input_w
+        scale_y = new_h / input_h
+
+        # Copy the points to avoid changing the original array
+        points_xy = points_xy.astype(np.float32)
+        # Divide the points by the scale factor (to rollback the resize)
+        points_xy[:, 0] /= scale_x
+        points_xy[:, 1] /= scale_y
+
+        # Calculate the position of the center crop
+        y1, x1 = (new_h - output_h) // 2, (new_w - output_w) // 2
+
+        # Translate the points
+        points_xy[:, 0] += x1
+        points_xy[:, 1] += y1
+
+        return points_xy
 
     def __iter__(self):
         return self

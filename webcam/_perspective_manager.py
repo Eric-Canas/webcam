@@ -13,17 +13,32 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
+INPUT, OUTPUT = 'input', 'output'
 
 class _PerspectiveManager:
     def __init__(self, homography_matrix: np.ndarray|list[list[float], ...], default_w: int, default_h: int,
                  crop_boundaries: bool = False,
                  boundaries_color: tuple[float|int, float|int, float|int] = (0., 0., 0.)):
         self.default_w, self.default_h = default_w, default_h
+
         homography_matrix = np.array(homography_matrix, dtype=np.float32)
         self.homography_matrix = self.__apply_non_negative_translation_to_homography_matrix(m=homography_matrix,
                                                                                              w=default_w, h=default_h)
+        # Inverse homography matrix is used for knowing the original place of coordinates in the warped image space
+        self.inverse_homography_matrix = np.linalg.inv(self.homography_matrix)
+
         self.crop_boundaries = crop_boundaries
         self.boundaries_color = boundaries_color
+
+    @property
+    def output_w(self) -> int:
+        w, h = self.after_warp_image_shape(w=self.default_w, h=self.default_h)
+        return w
+
+    @property
+    def output_h(self) -> int:
+        w, h = self.after_warp_image_shape(w=self.default_w, h=self.default_h)
+        return h
 
     @lru_cache(maxsize=32)
     def __build_corners(self, w: float|int, h: float|int):
@@ -135,12 +150,122 @@ class _PerspectiveManager:
         return combined_matrix
 
 
-class _DummyPerspectiveManager:
-    def __init__(self, *args, **kwargs):
-        pass
+    # ------------------------------ CALCULATE MAGNIFICATION FACTOR ------------------------------
 
-    def after_warp_image_shape(self, w: int, h: int) -> tuple[int, int]:
-        return w, h
+    @lru_cache(maxsize=64)
+    def get_hw_magnification_at_point(self, x:int|float, y:int|float) -> tuple[float, float]:
+        """
+        Get the magnification factor for the given point. It is calculated by setting two vectors extending along
+        x and y axes around the point (x, y), a horizontal and a vertical one, with length 2. The vectors are then
+        transformed by the homography matrix and the magnification factor is calculated as the ratio between the
+        length of the transformed vectors and the original ones.
+        :param x: int or float. The x coordinate of the point.
+        :param y: int or float. The y coordinate of the point.
+        :return: tuple[float, float]. The magnification factor for the given point. In the form (h_magnification, w_magnification).
+        """
+        assert self.homography_matrix is not None, "Homography matrix must be set before calling this method."
+        assert self.homography_matrix.shape == (3, 3), f"Homography matrix must be a 3x3 matrix. Got {'x'.join(self.homography_matrix.shape)}"
 
-    def warp(self, image: np.ndarray) -> np.ndarray:
-        return image
+        # Define two vectors extending along x and y axes around the point (x, y) with length 2
+        vec_x = np.array(((x-1., y, 1.), (x, y, 1.), (x+1., y, 1.)), dtype=np.float32).T
+        vec_y = np.array(((x, y-1., 1.), (x, y, 1.), (x, y+1., 1.)), dtype=np.float32).T
+
+        # Apply the homography matrix to the two vectors
+        vec_x_transformed = np.dot(self.homography_matrix, vec_x)
+        vec_y_transformed = np.dot(self.homography_matrix, vec_y)
+
+        # Convert the transformed coordinates from homogeneous to Cartesian coordinates
+        vec_x_transformed /= vec_x_transformed[2]
+        vec_y_transformed /= vec_y_transformed[2]
+
+        # Compute the lengths of the transformed vectors
+        length_transformed_x = np.linalg.norm(vec_x_transformed[:, -1] - vec_x_transformed[:, 0])
+        length_transformed_y = np.linalg.norm(vec_y_transformed[:, -1] - vec_y_transformed[:, 0])
+
+        # The magnification in x and y directions is the ratio of transformed length to original length
+        homography_magnification_w = length_transformed_x / (vec_x[0, -1] - vec_x[0, 0]) if (vec_x[0, -1] - vec_x[
+            0, 0]) != 0 else 1.0
+        homography_magnification_h = length_transformed_y / (vec_y[1, -1] - vec_y[1, 0]) if (vec_y[1, -1] - vec_y[
+            1, 0]) != 0 else 1.0
+
+        return homography_magnification_w, homography_magnification_h
+
+    def get_hw_magnification_for_line(self, xyxy_line: np.ndarray | tuple[int | float, int | float, int | float, int | float],
+                                      space: str = INPUT) \
+            -> tuple[float, float]:
+        """
+        Get the magnification factor for the given line. It is calculated by transforming the two endpoints of the line
+        and calculating the ratio between the length of the transformed line and the original one.
+        :param xyxy_line: np.ndarray or tuple[int|float, int|float, int|float, int|float]. The line to which the magnification
+        factor must be calculated. It can be either a tuple with the coordinates of the two endpoints of the line or a
+        numpy array with shape (2, 2) containing the coordinates of the two endpoints of the line.
+        :param space: str. The space in which the line is defined. It can be either 'input' or 'output'. Default is 'output'.
+        :return: tuple[float, float]. The magnification factor for the given line. In the form (h_magnification, w_magnification).
+        """
+        assert self.homography_matrix is not None, "Homography matrix must be set before calling this method."
+        assert self.homography_matrix.shape == (
+        3, 3), f"Homography matrix must be a 3x3 matrix. Got {'x'.join(map(str, self.homography_matrix.shape))}"
+
+        if isinstance(xyxy_line, (tuple, list)):
+            assert len(xyxy_line) == 4, f"Expected tuple of length 4, but got length {len(xyxy_line)}."
+            xyxy_line = np.array(xyxy_line, dtype=np.float32)
+        assert isinstance(xyxy_line, np.ndarray), "Line must be either a tuple or a numpy array."
+        xyxy_line = xyxy_line.reshape(2, 2)
+
+        # If line is given in output space, convert it. NOTE: That's dangerous. If using as module on webcam, if
+        # the line is received in the output space, will probably mean that the resize has not been reverted.
+        if space == OUTPUT:
+            xyxy_line = self.output_space_points_to_input_space(points_xy=xyxy_line)
+
+        # Transform the line using homography matrix
+        line_transformed = np.dot(self.homography_matrix, np.c_[xyxy_line, np.ones(2)].T)
+        line_transformed /= line_transformed[2]
+
+        # Calculate the lengths in x and y directions separately for the original and transformed lines
+        #dx_original, dy_original = np.abs(xyxy_line[1] - xyxy_line[0])
+        #dx_transformed, dy_transformed = np.abs(np.diff(line_transformed[:2], axis=1).squeeze())
+
+        # Calculate the magnification in x and y directions separately
+        #magnification_w = dx_transformed / dx_original if dx_original != 0 else 1.0
+        #magnification_h = dy_transformed / dy_original if dy_original != 0 else 1.0
+
+        # TODO: We are calculating the magnification for the whole line, because h,w magnification becomes buggy when
+        #  lines are too horizontal or vertical. We should find a way to fix that.
+        # Calculate the lengths for the original and transformed lines
+        len_original = np.sqrt(np.sum((xyxy_line[1] - xyxy_line[0]) ** 2))
+        len_transformed = np.sqrt(np.sum(np.diff(line_transformed[:2], axis=1).squeeze() ** 2))
+
+        # Calculate the magnification
+        magnification = len_transformed / len_original if len_original != 0 else 1.0
+
+        return magnification, magnification
+
+
+    def output_space_points_to_input_space(
+        self, points_xy: np.ndarray | tuple[int | float, int | float, int | float, int | float]) -> np.ndarray:
+        """
+        Transform the given line from output space to input space.
+
+        :param points_xy: np.ndarray or tuple[int|float, int|float, int|float, int|float]. The line to be transformed.
+        It can be either a tuple with the coordinates of the two endpoints of the line or a numpy array with shape (2, 2)
+        containing the coordinates of the two endpoints of the line.
+
+        :return: np.ndarray. The transformed line in input space. It has shape (2, 2).
+        """
+        assert self.inverse_homography_matrix is not None, "Homography matrix must be set before calling this method."
+        assert self.inverse_homography_matrix.shape == (3, 3), \
+            f"Inverse Homograph matrix must be a 3x3 matrix. Got {'x'.join(map(str, self.homography_matrix.shape))}"
+
+        if isinstance(points_xy, (tuple, list)):
+            points_xy = np.array(points_xy, dtype=np.float32)
+        assert isinstance(points_xy, np.ndarray), "Line must be either a tuple, a list or a numpy array."
+        points_xy = points_xy.reshape(-1, 2)
+        n_points, coords = points_xy.shape
+        assert coords == 2, f"Expected 2 coordinates per point, but got {coords}."
+
+        # Transform the line back to the input space using the inverse homography matrix
+        points_transformed = np.dot(self.inverse_homography_matrix, np.c_[points_xy, np.ones(n_points)].T)
+        points_transformed /= points_transformed[2]
+        points_transformed = points_transformed[:2].T
+
+        return points_transformed
