@@ -14,15 +14,13 @@ Designed for **simplicity** and **user-friendliness**, **Webcam** provides advan
 
 - **Customizable Frame Configuration**: With **Webcam**, you can define the specific **frame size** and manage **aspect ratio** changes when the camera's native resolution differs. Keep the widest field of view by setting just one dimension, or set both and decide between **center cropping** or **resizing** (sacrificing aspect ratio).
 
-- **Perspective Transform**: Initialize the **Webcam** object with a **Homography Matrix** to maintain consistent perspective correction in every frame, without having to worry about unexpected shifts or missmatches on the expected _frame size_.  If the perspective is deformed, you have the choice to **crop** the frame, removing black borders, or display the entire trapezoid to avoid losing any information.
+- **Perspective Transform**: Initialize the **Webcam** object with a **Homography Matrix** to maintain consistent perspective correction in every frame, while keeping the specified _frame size_.  If the perspective is deformed, you have the choice to **crop** the frame, removing black borders, or display the entire trapezoid to avoid losing any information.
 
-- **Reversibility**: **Webcam** can reverse all applied transformations, allowing you to easily retrieve _original coordinates_ and _pixel magnification_ for any point or section of the image. This is a valuable feature for **Computer Vision Engineers** needing to perform calculations based on the **raw camera sensor data**.
-  
-- **OpenCV Compatibility**: **Webcam** supports *RGB* and *BGR* reading, ensuring compatibility with your existing [OpenCV](https://opencv.org/) pipelines.
+- **Reversibility**: **Webcam** can easily retrieve _original coordinates_ and _pixel magnification_ for any point or section of the image. This is a valuable feature for **Computer Vision Engineers** needing to perform calculations based on the **raw camera sensor data**.
 
 - **Background Reading**: Enhances performance by reading frames in a background thread, with an option to limit the frame rate.
 
-- **Webcam Input Emulation**: Uses **video files** to accurately **emulate webcam input**. The frame you access at any instant matches the one from a **real-time webcam stream** at the same time, a feature that's especially handy for testing and development scenarios.
+- **Webcam Input Emulation**: You can use **video files** to accurately **emulate webcam input**. The frame you access at any instant will match the one from a **real-time webcam stream** at the same time. Especially handy for testing and development scenarios.
 
 - **Iterator and Batch Processing**: **Webcam** offers an iterator for simplified camera frame reading, with optional batch yielding for efficient data handling.
 
