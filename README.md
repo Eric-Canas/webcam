@@ -46,6 +46,7 @@ from webcam import Webcam
 #  with a frame width of 640 (auto setting heigth to keep original aspect ratio)
 webcam = Webcam(src=0, w=640)
 print(f"Frame size: {webcam.w} x {webcam.h})
+
 for frame in webcam:
     # Show the frames in a cv2 window
     cv2.imshow('Webcam Frame', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
@@ -69,17 +70,17 @@ from webcam import Webcam
 video_source = os.path.join('resources', 'test_video.mp4')
 
 # Set an expected width and height, defining that "if aspect ratio differs", center crop the image.
-webcam_without_deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='crop')
+no_deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='crop')
 
 # Replicate the situation, but defining that, "if aspect ratio differs", resize it, accepting the produced deformation.
-webcam_with_deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='resize')
+deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='resize')
 
 # Print the original video resolution (output resolution will be 640 x 640 as specified)
-print(f"Original WxH: {webcam_without_deformation.raw_w} x {webcam_without_deformation.raw_h}\n")
+print(f"Original WxH: {no_deformation.raw_w} x {no_deformation.raw_h}\n")
 
-# Print the pixel magnification suffered in both cases (Cropped one will have a higher magnification in the input's largest axis)
-print(f"Resize WxH Magnification: {webcam_with_deformation.pixel_magnification_w} x {webcam_with_deformation.pixel_magnification_h}")
-print(f"Center Crop WxH Magnification: {webcam_without_deformation.pixel_magnification_w} x {webcam_without_deformation.pixel_magnification_h}")
+# Print the magnification in both cases (Cropped one will have a higher magnification on the input's largest axis)
+print(f"Resize WxH Magnification: {deformation.pixel_magnification_w} x {deformation.pixel_magnification_h}")
+print(f"Center Crop WxH Magnification: {no_deformation.pixel_magnification_w} x {no_deformation.pixel_magnification_h}")
 ```
 
 ```bash
