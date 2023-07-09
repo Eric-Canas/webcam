@@ -81,6 +81,10 @@ print(f"Original WxH: {no_deformation.raw_w} x {no_deformation.raw_h}\n")
 # Print the magnification in both cases (Cropped one will have a higher magnification on the input's shortest axis)
 print(f"Resize WxH Magnification: {deformation.pixel_magnification_w} x {deformation.pixel_magnification_h}")
 print(f"Center Crop WxH Magnification: {no_deformation.pixel_magnification_w} x {no_deformation.pixel_magnification_h}")
+
+# Read the frames just as you would do it on OpenCV
+grabbed, non_deformed_frame = no_deformation.read()
+grabbed, deformed_frame = deformation.read()
 ```
 
 ```bash
