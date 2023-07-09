@@ -1,11 +1,11 @@
 # Webcam
 <img alt="webcam" title="webcam" src="https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/logo.png" width="20%" align="left"> **Webcam** is a simple, yet powerful Python library that brings advanced webcam handling to your projects. Implemented under the same interface than [cv2.VideoCapture](https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#a57c0e81e83e60f36c83027dc2a188e80), it heavily simplifies _high-level_ frame manipulation, providing an intuitive and versatile way to handle video input from a range of sources like _webcams_, _IP cameras_, and _video files_.
 
-**Webcam** grants you the power to dictate the **exact _frame size_** you want to read, regulate **_aspect ratio_**, and apply **Perspective Transforms** directly on the video stream, while retaining valuable information about **pixel origin** and **magnification** (useful for calculating image characteristics that depend on the camera sensor).
+With **Webcam**, you can easily control the **frame size**, adjust the **aspect ratio**, and apply **Perspective Transforms** to the _video stream_, all while preserving crucial information about **pixel origin** and **magnification**.
 
 Furthermore, it includes a unique aspect that allows users to authentically **mirror webcam input** using _video files_. It ensures that the frame accessed at any particular moment matches the exact frame you'd encounter in a **real-time webcam stream**, making it a valuable tool for testing and development.
 
-Designed for **simplicity** and **user-friendliness**, **Webcam** provides advanced features without compromising **ease of use**. This allows you to channel your efforts into developing your application, instead of grappling with the details and complexities of webcam control and frame manipulation.
+Designed for **simplicity** and **user-friendliness**, **Webcam** provides advanced features without compromising **ease of use**. This allows you to channel your efforts into developing your application, instead of wrestling with webcam control and frame manipulation details..
 
 ## Advanced Functionality
 **Webcam** showcases a rich set of features, advancing beyond fundamental webcam manipulation to offer a higher degree of control and flexibility:
@@ -34,3 +34,44 @@ You can install **Webcam** with
 ```bash
 pip install webcam
 ```
+
+## Usage
+
+Reading a video stream is as simple as iterating over the defined **webcam** object.
+
+```python
+from webcam import Webcam
+
+# Define a simple webcam object that will get video stream from webcam (src=0),
+#  with a frame width of 640 (auto setting heigth to keep original aspect ratio)
+webcam = Webcam(src=0, w=640)
+print(f"Frame size: {webcam.w}x{webcam.h})
+for frame in webcam:
+    # Show the frames in a cv2 window
+    cv2.imshow('Webcam Frame', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+    # Break the loop if the user presses the 'q' key
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+```
+```bash
+>>> Frame size: 360x640
+```
+
+### Fitting to a strict frame size
+
+Sometimes, your _Apps_ or _Computer Vision Models_ might need specific frame sizes that don't align with your video source's resolution. **Webcam** frees the user of having to deal with these frame resize details, especially when there's a discrepancy in the aspect ratio between the input and output.
+
+```python
+import os
+from webcam import Webcam
+
+# Let's use a video as a source instead of webcam
+video_source = os.path.join('resources', 'test_video.mp4')
+
+# Set an expected width and height, defining that "if aspect ratio differs", center crop the image.
+webcam_without_aspect_ratio_deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='crop')
+
+# Replicate the situation, but defining that, "if aspect ratio differs", resize it, accepting the produced deformation.
+webcam_without_aspect_ratio_deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='resize')
+```
+
