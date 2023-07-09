@@ -90,3 +90,7 @@ Resize WxH Magnification: 0.50 x 0.89
 Center Crop WxH Magnification: 0.89 x 0.89
 ```
 
+
+| Input Frame (1280x720) | Resized (640x640) | Center Crop (640x640) |
+|:-------------------------:|:-------------------------:|:-------------------------:|
+| ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/resized_frame.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/center_crop_frame.png) |
