@@ -78,7 +78,7 @@ deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='resiz
 # Print the original video resolution (output resolution will be 640 x 640 as specified)
 print(f"Original WxH: {no_deformation.raw_w} x {no_deformation.raw_h}\n")
 
-# Print the magnification in both cases (Cropped one will have a higher magnification on the input's largest axis)
+# Print the magnification in both cases (Cropped one will have a higher magnification on the input's shortest axis)
 print(f"Resize WxH Magnification: {deformation.pixel_magnification_w} x {deformation.pixel_magnification_h}")
 print(f"Center Crop WxH Magnification: {no_deformation.pixel_magnification_w} x {no_deformation.pixel_magnification_h}")
 ```
@@ -86,6 +86,7 @@ print(f"Center Crop WxH Magnification: {no_deformation.pixel_magnification_w} x 
 ```bash
 Original WxH: 1280 x 720
 
-
+Resize WxH Magnification: 0.50 x 0.89
+Center Crop WxH Magnification: 0.89 x 0.89
 ```
 
