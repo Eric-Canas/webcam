@@ -99,7 +99,7 @@ Center Crop WxH Magnification: 0.89 x 0.89
 
 | Input Frame (1280x720) | Resized (640x640) | Center Crop (640x640) |
 |:-------------------------:|:-------------------------:|:-------------------------:|
-| ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/resized_frame.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/center_crop_frame.png) |
+| ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/strict_frame_size/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/strict_frame_size/resized_frame.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/strict_frame_size/center_crop_frame.png) |
 
 ## Applying Perspective Corrections
 
@@ -120,19 +120,29 @@ no_borders = Webcam(src=video_source, h=640, homography_matrix=homography_matrix
 # ---------------------------------------------------------------------------------------------------
 
 # Let's calculate the origin of some coordinates in the raw input resolution (Note it expects a batch of points).
-full_pers_x, full_pers_y = full_perspective.output_space_points_to_input_space(points_xy=((250, 250),))[0]
-no_borders_x, no_borders_y = no_borders.output_space_points_to_input_space(points_xy=((500, 500), ))[0]
+full_pers_x, full_pers_y = full_perspective.output_space_points_to_input_space(points_xy=((150, 225),))[0]
+no_borders_x, no_borders_y = no_borders.output_space_points_to_input_space(points_xy=((625, 200), ))[0]
 
 # Let's also calculate the precise pixel magnification of two coords in the same image. As perspective deformations
 #  does not produce homogeneus magnifications as would happen when only resizes and/or crops are applied
-no_borders_h_top, no_borders_w_top = no_borders.get_magnification_hw(x=100, y=100)
-no_borders_h_bot, no_borders_w_bot = no_borders.get_magnification_hw(x=400, y=400)
+no_borders_h_left, no_borders_w_left = no_borders.get_magnification_hw(x=150, y=225)
+no_borders_h_right, no_borders_w_right = no_borders.get_magnification_hw(x=600, y=225)
 
-print(f"Maginfication WxH at 100x100: {no_borders_w_top} x {no_borders_h_top}")
-print(f"Maginfication WxH at 400x400: {no_borders_w_bot} x {no_borders_h_bot}")
+print(f"Maginfication WxH at (150, 225): {no_borders_w_left} x {no_borders_h_left}")
+print(f"Maginfication WxH at (600, 225): {no_borders_w_right} x {no_borders_h_right}\n")
+
+print(f"Full Perspective: (150, 225) came from ({full_pers_x}, {full_pers_y})")
+print(f"Cropped Perspective: (625, 200) came from ({no_borders_x}, {no_borders_y})")
 ```
 
 ```bash
->>> Maginfication WxH at 100x100: 1.048 x 1.011
->>> Maginfication WxH at 400x400: 1.053 x 0.916
+>>> Maginfication WxH at (150, 225): 1.064 x 0.999
+>>> Maginfication WxH at (600, 225): 0.984 x 0.842
+
+>>> Full Perspective: (150, 225) came from (156.63, 258.30)
+>>> Cropped Perspective: (625, 200) came from (733.69, 255.35)
 ```
+
+| Input Frame (1280x720) | Full Perspective (943x640) | Hidding Borders (980x640) |
+|:-------------------------:|:-------------------------:|:-------------------------:|
+| ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/full_perspective.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/no_borders_perspective.png) |
