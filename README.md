@@ -119,11 +119,11 @@ no_borders = Webcam(src=video_source, h=640, homography_matrix=homography_matrix
 
 # ---------------------------------------------------------------------------------------------------
 
-# Let's calculate the origin of some coordinates in the raw input resolution (Note it expects a batch of points).
+# Let's calculate the origin of some coordinates in the raw input resolution (Note it expects a batch).
 full_pers_x, full_pers_y = full_perspective.output_space_points_to_input_space(points_xy=((150, 225),))[0]
 no_borders_x, no_borders_y = no_borders.output_space_points_to_input_space(points_xy=((625, 200), ))[0]
 
-# Let's also calculate the precise pixel magnification of two coords in the same image. As perspective deformations
+# Let's calculate the precise pixel magnification of two coords in an image. As perspective deformations
 #  does not produce homogeneus magnifications as would happen when only resizes and/or crops are applied
 no_borders_h_left, no_borders_w_left = no_borders.get_magnification_hw(x=150, y=225)
 no_borders_h_right, no_borders_w_right = no_borders.get_magnification_hw(x=600, y=225)
