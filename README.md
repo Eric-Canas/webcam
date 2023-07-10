@@ -47,6 +47,7 @@ from webcam import Webcam
 webcam = Webcam(src=0, w=640)
 print(f"Frame size: {webcam.w} x {webcam.h})
 
+
 for frame in webcam:
     # Show the frames in a cv2 window
     cv2.imshow('Webcam Frame', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
@@ -75,6 +76,8 @@ no_deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='cr
 # Replicate the situation, but defining that, "if aspect ratio differs", resize it, accepting the produced deformation.
 deformation = Webcam(src=video_source, w=640, h=640, on_aspect_ratio_lost='resize')
 
+# ---------------------------------------------------------------------------------------------------
+
 # Print the original video resolution (output resolution will be 640 x 640 as specified)
 print(f"Original WxH: {no_deformation.raw_w} x {no_deformation.raw_h}\n")
 
@@ -94,7 +97,42 @@ Resize WxH Magnification: 0.50 x 0.89
 Center Crop WxH Magnification: 0.89 x 0.89
 ```
 
-
 | Input Frame (1280x720) | Resized (640x640) | Center Crop (640x640) |
 |:-------------------------:|:-------------------------:|:-------------------------:|
 | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/resized_frame.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/center_crop_frame.png) |
+
+## Applying Perspective Corrections
+
+You can setup **Homography Matrices** to automatically apply _perspective transforms_. Wether if you apply them or not, you can keep the track of the origin of every coordinate in the raw sensor image.
+
+```python
+from webcam import Webcam
+
+# Build an homography matrix that modifies the image perspective
+homography_matrix = [[1., 0.1, 0.],
+                     [0.1, 1., 0.],
+                     [0.0002, -0.0001, 1.]]
+
+# Build a webcam object passing this homography matrix (let's set a fixed height and let it decide width).
+full_perspective = Webcam(src=video_source, h=640, homography_matrix=homography_matrix, crop_on_warping=False)
+no_borders = Webcam(src=video_source, h=640, homography_matrix=homography_matrix, crop_on_warping=True)
+
+# ---------------------------------------------------------------------------------------------------
+
+# Let's calculate the origin of some coordinates in the raw input resolution (Note it expects a batch of points).
+full_pers_x, full_pers_y = full_perspective.output_space_points_to_input_space(points_xy=((250, 250),))[0]
+no_borders_x, no_borders_y = no_borders.output_space_points_to_input_space(points_xy=((500, 500), ))[0]
+
+# Let's also calculate the precise pixel magnification of two coords in the same image. As perspective deformations
+#  does not produce homogeneus magnifications as would happen when only resizes and/or crops are applied
+no_borders_h_top, no_borders_w_top = no_borders.get_magnification_hw(x=100, y=100)
+no_borders_h_bot, no_borders_w_bot = no_borders.get_magnification_hw(x=400, y=400)
+
+print(f"Maginfication WxH at 100x100: {no_borders_w_top} x {no_borders_h_top}")
+print(f"Maginfication WxH at 400x400: {no_borders_w_bot} x {no_borders_h_bot}")
+```
+
+```bash
+>>> Maginfication WxH at 100x100: 1.048 x 1.011
+>>> Maginfication WxH at 400x400: 1.053 x 0.916
+```
