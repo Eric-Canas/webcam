@@ -167,7 +167,7 @@ for frame in webcam_12_fps:
 video_writer.release()
 ```
 
-| 5 FPS (1280x720) | 12 FPS (943x640) |
+| 5 FPS (1280x720) | 12 FPS (1280x720) |
 |:-------------------------:|:-------------------------:|
 | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/limited_frame_rate/5_fps.gif) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/limited_frame_rate/12_fps.gif) |
 
