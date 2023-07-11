@@ -146,3 +146,6 @@ print(f"Cropped Perspective: (625, 200) came from ({no_borders_x}, {no_borders_y
 | Input Frame (1280x720) | Full Perspective (943x640) | Hidding Borders (980x640) |
 |:-------------------------:|:-------------------------:|:-------------------------:|
 | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/full_perspective.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/no_borders_perspective.png) |
+
+### Limiting maximum frame rate
+One of the most valuable **Webcam** features is the capability to mimic **real-time streaming** input from local video files. It means that, when reading a video, it won't retrieve you the next frame every time you call ``webcam.read()``, but the frame that you would read at the current timestamp if input would come from a webcam. It is so helpful for debugging.
