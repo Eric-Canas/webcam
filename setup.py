@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='webcam',
-    version='1.10',
+    version='1.13',
     author='Eric-Canas',
     author_email='eric@ericcanas.com',
     url='https://github.com/Eric-Canas/webcam',
@@ -12,7 +12,7 @@ setup(
     long_description_content_type='text/markdown',
     license='MIT',
     packages=find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     install_requires=[
         'numpy',
         'opencv-python',

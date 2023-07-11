@@ -147,7 +147,7 @@ class Webcam:
 
         if self.max_frame_rate is not None:
             # Sleep to simulate the frame rate (0.8 is a magic number, just to compensate the execution resuming time)
-            time.sleep(max(0, (1/self.max_frame_rate)*0.8 - (time.time() - self.last_frame_timestamp)))
+            time.sleep(max(0, (1/self.max_frame_rate)*0.9 - (time.time() - self.last_frame_timestamp)))
             self.last_frame_timestamp = time.time()
 
         return frames[0] if self.batch_size is None else np.stack(frames, axis=0)
