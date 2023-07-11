@@ -148,4 +148,24 @@ print(f"Cropped Perspective: (625, 200) came from ({no_borders_x}, {no_borders_y
 | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/base_frame.png) |  ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/full_perspective.png) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/perspective/no_borders_perspective.png) |
 
 ### Limiting maximum frame rate
-One of the most valuable **Webcam** features is the capability to mimic **real-time streaming** input from local video files. It means that, when reading a video, it won't retrieve you the next frame every time you call ``webcam.read()``, but the frame that you would read at the current timestamp if input would come from a webcam. It is so helpful for debugging.
+Sometimes, you'll need to simulate a fixed frame rate (for example, when you want to write video files). For these cases, you can limit the maximum frame rate. It will transform the frame retrieval in a blockant operation, making sure that you don't surpass the specified frame rate.
+
+```python
+from webcam import Webcam
+
+# Build a webcam object that will limit frame rate to a maximum of 12 fps (get it as BGR).
+webcam_12_fps = Webcam(src=video_source, max_frame_rate=12, as_bgr=True)
+
+# Write the video on a .mp4 file that requires a fixed pre-known frame rate
+video_writer = cv2.VideoWriter(filename='test.mp4', fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
+                               fps=12, frameSize=(webcam_12_fps.w, webcam_12_fps.h))
+
+for frame in webcam_12_fps:
+    video_writer.write(frame)
+video_writer.release()
+```
+
+| 5 FPS (1280x720) | 12 FPS (943x640) |
+|:-------------------------:|:-------------------------:|
+| ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/limited_frame_rate/5_fps.gif) | ![](https://raw.githubusercontent.com/Eric-Canas/webcam/main/resources/usage_examples/limited_frame_rate/12_fps.gif) |
+
