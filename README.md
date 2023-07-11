@@ -156,6 +156,8 @@ from webcam import Webcam
 # Build a webcam object that will limit frame rate to a maximum of 12 fps (get it as BGR).
 webcam_12_fps = Webcam(src=video_source, max_frame_rate=12, as_bgr=True)
 
+# ---------------------------------------------------------------------------------------------------
+
 # Write the video on a .mp4 file that requires a fixed pre-known frame rate
 video_writer = cv2.VideoWriter(filename='test.mp4', fourcc=cv2.VideoWriter_fourcc(*'mp4v'),
                                fps=12, frameSize=(webcam_12_fps.w, webcam_12_fps.h))
