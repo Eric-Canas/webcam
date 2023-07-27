@@ -42,6 +42,7 @@ class _VideoWebcam:
             current_frame = int((time.time() - self.start_timestamp) * self.fps) % self.video_length
             return self.get_required_frame(target_frame=current_frame)
         else:
+            # TODO: Adjust the frame rate if max_fps is set
             return self.cap.read()
 
     def get_required_frame(self, target_frame: int) -> tuple[bool, None | np.ndarray]:

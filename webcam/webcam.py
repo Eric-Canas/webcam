@@ -40,9 +40,8 @@ class Webcam:
         on_aspect_ratio_lost: str = CROP,
         homography_matrix: np.ndarray | list[list[float], ...] | None = None,
         crop_on_warping: bool = True,
-        boundaries_color: tuple[int, int, int] | list[int, int, int] = (0, 0, 0)
-        simulate_webcam: bool = True
-    ):
+        boundaries_color: tuple[int, int, int] | list[int, int, int] = (0, 0, 0),
+        simulate_webcam: bool = True):
         """
         Initialize the WebcamReader.
 
