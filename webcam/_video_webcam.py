@@ -20,7 +20,7 @@ import numpy as np
 
 
 class _VideoWebcam:
-    def __init__(self, video_path: str):
+    def __init__(self, video_path: str, simulate_webcam: bool = True):
         """
         Initialize the _VideoWebcam.
 
@@ -28,6 +28,7 @@ class _VideoWebcam:
         """
         assert os.path.isfile(video_path), f'Video file not found at {video_path}'
         self.cap = cv2.VideoCapture(video_path)
+        self.simulate_webcam = simulate_webcam
         self.video_length = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
 
@@ -37,8 +38,11 @@ class _VideoWebcam:
         assert ret, f'Video file at {video_path} is invalid'
 
     def read(self):
-        current_frame = int((time.time() - self.start_timestamp) * self.fps) % self.video_length
-        return self.get_required_frame(target_frame=current_frame)
+        if self.simulate_webcam:
+            current_frame = int((time.time() - self.start_timestamp) * self.fps) % self.video_length
+            return self.get_required_frame(target_frame=current_frame)
+        else:
+            return self.cap.read()
 
     def get_required_frame(self, target_frame: int) -> tuple[bool, None | np.ndarray]:
         last_frame = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))

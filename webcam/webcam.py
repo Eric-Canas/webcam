@@ -39,7 +39,9 @@ class Webcam:
         max_frame_rate: int | None = None,
         on_aspect_ratio_lost: str = CROP,
         homography_matrix: np.ndarray | list[list[float], ...] | None = None,
-        crop_on_warping: bool = True
+        crop_on_warping: bool = True,
+        boundaries_color: tuple[int, int, int] | list[int, int, int] = (0, 0, 0)
+        simulate_webcam: bool = True
     ):
         """
         Initialize the WebcamReader.
@@ -56,6 +58,11 @@ class Webcam:
         If passed, frames will be warped before any other processing.
         :param crop_on_warping: bool. Only applied when homography_matrix is given. Determines if there will be visible
         black perspective boundaries, or if the image will be cropped to hide them. Default: True
+        :param boundaries_color: tuple[int, int, int] or list[int, int, int]. Only applied when artificial boundaries
+        must appear in the image, (as for example, when homography_matrix is given and crop_on_warping is False).
+        :param simulate_webcam: bool. Only applied on videos. If True, the video will be readed simulating a webcam source,
+        (the frame you'll read won't be the next one, but the one you would expect from a real-time video streaming. If False,
+        the video will be readed sequentially, frame by frame.
         """
         assert on_aspect_ratio_lost in (CROP, RESIZE), f"Invalid value for `on_aspect_ratio_lost`: {on_aspect_ratio_lost}." \
                                                        f" Valid values are: {CROP}, {RESIZE}"
@@ -63,7 +70,7 @@ class Webcam:
         self.on_aspect_ratio_lost = on_aspect_ratio_lost
         # Initialize it for videos if the source is a string and a file exists at the path
         if isinstance(src, str) and os.path.isfile(src):
-            self.cap = _VideoWebcam(video_path=src)
+            self.cap = _VideoWebcam(video_path=src, simulate_webcam=simulate_webcam)
         # Otherwise assume it is a webcam (both webcam or RTSP stream)
         else:
             self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
@@ -75,7 +82,8 @@ class Webcam:
             self.perspective_manager = _PerspectiveManager(homography_matrix=homography_matrix,
                                                            default_h=self.raw_h,
                                                            default_w=self.raw_w,
-                                                           crop_boundaries=crop_on_warping)
+                                                           crop_boundaries=crop_on_warping,
+                                                           boundaries_color=boundaries_color)
 
         # Calculate and set output frame size
         self.frame_size_hw = self._calculate_and_set_desired_resolution(h=h, w=w)

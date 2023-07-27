@@ -154,7 +154,7 @@ Sometimes, you'll need to simulate a fixed frame rate (for example, when you wan
 from webcam import Webcam
 
 # Build a webcam object that will limit frame rate to a maximum of 12 fps (get it as BGR).
-webcam_12_fps = Webcam(src=video_source, max_frame_rate=12, as_bgr=True)
+webcam_12_fps = Webcam(src=video_source, max_frame_rate=12, as_bgr=True, simulate_webcam=True)
 
 # ---------------------------------------------------------------------------------------------------
 
