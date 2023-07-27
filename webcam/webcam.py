@@ -20,6 +20,7 @@ import time
 
 import os
 
+from webcam._image_webcam import _ImageWebcam
 from webcam._video_webcam import _VideoWebcam
 from webcam._webcam_background import _WebcamBackground
 from webcam._perspective_manager import _PerspectiveManager
@@ -67,8 +68,12 @@ class Webcam:
                                                        f" Valid values are: {CROP}, {RESIZE}"
         self._background = run_in_background
         self.on_aspect_ratio_lost = on_aspect_ratio_lost
+
+        is_file = isinstance(src, str) and os.path.isfile(src)
         # Initialize it for videos if the source is a string and a file exists at the path
-        if isinstance(src, str) and os.path.isfile(src):
+        if (is_file and _is_image_file(file_path=src)) or isinstance(src, np.ndarray):
+            self.cap = _ImageWebcam(image_source=src)
+        elif is_file and _is_video_file(file_path=src):
             self.cap = _VideoWebcam(video_path=src, simulate_webcam=simulate_webcam)
         # Otherwise assume it is a webcam (both webcam or RTSP stream)
         else:
@@ -540,3 +545,26 @@ def get_rtsp_url(ip: str, username: str, password: str, port: int = 554, channel
     :return: str. The generated RTSP URL.
     """
     return f"rtsp://{username}:{password}@{ip}:{port}/cam/realmonitor?channel={channel}&subtype={stream}"
+
+
+def _is_image_file(file_path: str) -> bool:
+    """
+    Check if a file is an image by its extension.
+
+    :param file_path: str. Path to the file.
+    :return: bool. True if the file is an image, False otherwise.
+    """
+    image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".gif"}
+    _, extension = os.path.splitext(file_path)
+    return extension.lower() in image_extensions
+
+def _is_video_file(file_path: str) -> bool:
+    """
+    Check if a file is a video by its extension.
+
+    :param file_path: str. Path to the file.
+    :return: bool. True if the file is a video, False otherwise.
+    """
+    video_extensions = {".mp4", ".avi", ".mov", ".mkv", ".wmv", ".flv", ".webm", ".mpeg", ".mpg", ".m4v", ".3gp"}
+    _, extension = os.path.splitext(file_path)
+    return extension.lower() in video_extensions
