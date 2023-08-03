@@ -25,8 +25,11 @@ class _PerspectiveManager:
         homography_matrix = np.array(homography_matrix, dtype=np.float64)
         if source_hw is not None:
             src_h, src_w = source_hw
+            self.scale_x, self.scale_y = src_w / default_w, src_h / default_h
             homography_matrix = self.__apply_rescale_to_homography_matrix(m=homography_matrix, src_h=src_h, src_w=src_w,
                                                                           dst_h=default_h, dst_w=default_w)
+        else:
+            self.scale_x, self.scale_y = 1., 1.
         self.homography_matrix = self.__apply_non_negative_translation_to_homography_matrix(m=homography_matrix,
                                                                                              w=default_w, h=default_h)
         # Inverse homography matrix is used for knowing the original place of coordinates in the warped image space
@@ -186,8 +189,8 @@ class _PerspectiveManager:
         w_transformed, h_transformed = np.ptp(square_transformed[:2], axis=1)
 
         # Calculate the magnifications in width and height
-        magnification_w = w_transformed / line_length
-        magnification_h = h_transformed / line_length
+        magnification_w = (w_transformed / line_length) / self.scale_x
+        magnification_h = (h_transformed / line_length) / self.scale_y
 
         return magnification_h, magnification_w
 
@@ -221,6 +224,10 @@ class _PerspectiveManager:
         points_transformed = np.dot(self.inverse_homography_matrix, np.c_[points_xy, np.ones(n_points)].T)
         points_transformed /= points_transformed[2]
         points_transformed = points_transformed[:2].T
+
+        # Rollback the scaling
+        points_transformed[:, 0] /= self.scale_x
+        points_transformed[:, 1] /= self.scale_y
 
         return points_transformed
 
