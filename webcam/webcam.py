@@ -16,6 +16,7 @@ from functools import lru_cache
 
 import cv2
 import numpy as np
+from math import ceil
 import time
 
 import os
@@ -39,10 +40,12 @@ class Webcam:
         run_in_background: bool = False,
         max_frame_rate: int | None = None,
         on_aspect_ratio_lost: str = CROP,
+        simulate_webcam: bool = True,
+        # ----------- HOMOGRAPHY PARAMS ------------
         homography_matrix: np.ndarray | list[list[float], ...] | None = None,
         crop_on_warping: bool = True,
-        boundaries_color: tuple[int, int, int] | list[int, int, int] = (0, 0, 0),
-        simulate_webcam: bool = True):
+        homography_source_hw: tuple[int|float, int|float] | list[int|float, int|float] | None = None,
+        boundaries_color: tuple[int, int, int] | list[int, int, int] = (0, 0, 0)):
         """
         Initialize the WebcamReader.
 
@@ -58,6 +61,10 @@ class Webcam:
         If passed, frames will be warped before any other processing.
         :param crop_on_warping: bool. Only applied when homography_matrix is given. Determines if there will be visible
         black perspective boundaries, or if the image will be cropped to hide them. Default: True
+        :param homography_source_hw: tuple[int|float, int|float] or list[int|float, int|float] or None. Only applied when
+        homography_matrix is given. The height and width of the source image that was used to calculate the homography_matrix.
+        It is used to rescale the matrix if the source image had a different size than the readed frames. If None, the
+        homography_matrix will be used as is.
         :param boundaries_color: tuple[int, int, int] or list[int, int, int]. Only applied when artificial boundaries
         must appear in the image, (as for example, when homography_matrix is given and crop_on_warping is False).
         :param simulate_webcam: bool. Only applied on videos. If True, the video will be readed simulating a webcam source,
@@ -79,7 +86,8 @@ class Webcam:
         else:
             self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
         self.as_bgr = as_bgr
-
+        assert self.raw_h > 0 and self.raw_w > 0, f"Invalid frame size: {self.raw_h}x{self.raw_w}. Probably the" \
+                                                  f" check your source is valid."
         if homography_matrix is None:
             self.perspective_manager = None
         else:
@@ -87,6 +95,7 @@ class Webcam:
                                                            default_h=self.raw_h,
                                                            default_w=self.raw_w,
                                                            crop_boundaries=crop_on_warping,
+                                                           source_hw=homography_source_hw,
                                                            boundaries_color=boundaries_color)
 
         # Calculate and set output frame size
@@ -194,20 +203,21 @@ class Webcam:
         aspect_ratio = current_w / current_h
 
         # Calculate the new dimensions such that the smaller dimension matches the desired size
-        if current_h < current_w:
+        if h / w > current_h / current_w:
             new_h = h
-            new_w = int(np.ceil(new_h * aspect_ratio))
+            new_w = int(ceil(new_h * aspect_ratio))
         else:
             new_w = w
-            new_h = int(np.ceil(new_w / aspect_ratio))
+            new_h = int(ceil(new_w / aspect_ratio))
 
         # Resize the frame to the new dimensions
         frame = cv2.resize(src=frame, dsize=(new_w, new_h))
 
         # Calculate the position of the center crop
         y1, x1 = (new_h - h) // 2, (new_w - w) // 2
-        y2, x2 = y1 + h, x1 + w
+        assert y1 >= 0 and x1 >= 0, f"Invalid crop size: {h}x{w} for image with size {new_h}x{new_w}."
 
+        y2, x2 = y1 + h, x1 + w
         # Crop the frame
         return frame[y1:y2, x1:x2]
 
