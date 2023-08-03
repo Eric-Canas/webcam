@@ -18,10 +18,15 @@ INPUT, OUTPUT = 'input', 'output'
 class _PerspectiveManager:
     def __init__(self, homography_matrix: np.ndarray|list[list[float], ...], default_w: int, default_h: int,
                  crop_boundaries: bool = False,
+                 source_hw: tuple[int|float, int|float] | list[int|float, int|float] | None = None,
                  boundaries_color: tuple[float|int, float|int, float|int] = (0., 0., 0.)):
         self.default_w, self.default_h = default_w, default_h
 
-        homography_matrix = np.array(homography_matrix, dtype=np.float32)
+        homography_matrix = np.array(homography_matrix, dtype=np.float64)
+        if source_hw is not None:
+            src_h, src_w = source_hw
+            homography_matrix = self.__apply_rescale_to_homography_matrix(m=homography_matrix, src_h=src_h, src_w=src_w,
+                                                                          dst_h=default_h, dst_w=default_w)
         self.homography_matrix = self.__apply_non_negative_translation_to_homography_matrix(m=homography_matrix,
                                                                                              w=default_w, h=default_h)
         # Inverse homography matrix is used for knowing the original place of coordinates in the warped image space
@@ -244,6 +249,31 @@ class _PerspectiveManager:
         combined_matrix = np.dot(a=translation_matrix, b=m)
 
         return combined_matrix
+
+    def __apply_rescale_to_homography_matrix(self, m: np.ndarray, src_w: int, src_h: int,
+                                             dst_w: int, dst_h: int) -> np.ndarray:
+        """
+        Apply a rescale to the given homography matrix. It is used to make the homography matrix
+        applyable on images with different sizes than the one originally used to compute it.
+
+        :param m: np.ndarray. The matrix to be rescaled.
+        :param src_w: int. The original width which the homography matrix was computed on.
+        :param src_h: int. The original height which the homography matrix was computed on.
+        :param dst_w: int. The new width.
+        :param dst_h: int. The new height.
+
+        :return: np.ndarray. The rescaled homography matrix.
+        """
+        # Calculate scale factors
+        scale_x, scale_y = dst_w / src_w, dst_h / src_h
+
+        # Create scaling matrix
+        S = np.array(((scale_x, 0., 0.), (0., scale_y, 0.), (0., 0., 1.)), dtype=np.float32)
+
+        # Apply scaling to the original homography matrix
+        H_scaled = np.dot(np.dot(S, m), np.linalg.inv(S))
+
+        return H_scaled
 
     @lru_cache(maxsize=16)
     def __get_crop_bbox_xyxy(self, h: int | float, w: int | float,
