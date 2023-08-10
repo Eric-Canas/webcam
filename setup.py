@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='webcam',
-    version='1.19',
+    version='1.23',
     author='Eric-Canas',
     author_email='eric@ericcanas.com',
     url='https://github.com/Eric-Canas/webcam',

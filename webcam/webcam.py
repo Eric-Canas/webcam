@@ -85,19 +85,23 @@ class Webcam:
         # Otherwise assume it is a webcam (both webcam or RTSP stream)
         else:
             self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
+
         self.as_bgr = as_bgr
         assert self.raw_h > 0 and self.raw_w > 0, f"Invalid frame size: {self.raw_h}x{self.raw_w}. Probably the" \
                                                   f" check your source is valid."
-        if homography_matrix is None:
-            self.perspective_manager = None
-        else:
+
+
+        self.perspective_manager = None
+        if homography_matrix is not None:
+            # Preset the raw frame size to the one that the homography will receive
+            self._calculate_and_set_desired_resolution(h=h, w=w)
+            # Initialize the perspective manager
             self.perspective_manager = _PerspectiveManager(homography_matrix=homography_matrix,
                                                            default_h=self.raw_h,
                                                            default_w=self.raw_w,
                                                            crop_boundaries=crop_on_warping,
                                                            source_hw=homography_source_hw,
                                                            boundaries_color=boundaries_color)
-
         # Calculate and set output frame size
         self.frame_size_hw = self._calculate_and_set_desired_resolution(h=h, w=w)
 
@@ -114,6 +118,15 @@ class Webcam:
     @property
     def raw_w(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+
+    @property
+    def __max_h(self) -> int:
+        max_h, max_w = self._max_available_resolution()
+        return max_h
+    @property
+    def __max_w(self) -> int:
+        max_h, max_w = self._max_available_resolution()
+        return max_w
 
     @property
     def h(self) -> int:
@@ -281,7 +294,7 @@ class Webcam:
         :return: tuple. The final frame size (height, width).
         """
         # Set webcam to its maximum supported resolution
-        max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
+        max_h, max_w = self._set_webcam_resolution(h=self.__max_h, w=self.__max_w)
 
         if h is None and w is None:
             return max_h, max_w
@@ -306,11 +319,15 @@ class Webcam:
         """
 
         # Set the webcam resolution
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+        if self.raw_h != h:
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+        if self.raw_w != w:
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
         # Get the actual resolution set by the webcam
         return self.raw_h, self.raw_w
 
+
+    @lru_cache(maxsize=8)
     def _is_resolution_natively_supported(self, h: int, w: int):
         """
         Check if the webcam supports the specified resolution natively.
@@ -326,6 +343,7 @@ class Webcam:
         assert new_h == current_h and new_w == current_w, f"Webcam resolution could not be restored to {current_h}x{current_w}."
         return supported_h == h and supported_w == w
 
+    @lru_cache(maxsize=2)
     def _max_available_resolution(self) -> tuple[int, int]:
         """
         Get the maximum allowed webcam resolution without changing the current resolution.
