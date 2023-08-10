@@ -294,7 +294,7 @@ class Webcam:
         :return: tuple. The final frame size (height, width).
         """
         # Set webcam to its maximum supported resolution
-        max_h, max_w = self._set_webcam_resolution(h=self.__max_h, w=self.__max_w)
+        max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
 
         if h is None and w is None:
             return max_h, max_w
@@ -354,7 +354,9 @@ class Webcam:
         current_h, current_w = self.raw_h, self.raw_w
 
         # Set the webcam resolution to an extremely high value and get the resulting maximum allowed resolution
-        max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1e6)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1e6)
+        max_h, max_w = self.raw_h, self.raw_w
 
         # Restore the original resolution
         self._set_webcam_resolution(h=current_h, w=current_w)
