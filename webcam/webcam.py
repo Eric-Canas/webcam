@@ -41,6 +41,8 @@ class Webcam:
         max_frame_rate: int | None = None,
         on_aspect_ratio_lost: str = CROP,
         simulate_webcam: bool = True,
+        max_raw_h: int = 1e6,
+        max_raw_w: int = 1e6,
         # ----------- HOMOGRAPHY PARAMS ------------
         homography_matrix: np.ndarray | list[list[float], ...] | None = None,
         crop_on_warping: bool = True,
@@ -74,8 +76,8 @@ class Webcam:
         assert on_aspect_ratio_lost in (CROP, RESIZE), f"Invalid value for `on_aspect_ratio_lost`: {on_aspect_ratio_lost}." \
                                                        f" Valid values are: {CROP}, {RESIZE}"
         self._background = run_in_background
+        self.max_raw_h, self.max_raw_w = max_raw_h, max_raw_w
         self.on_aspect_ratio_lost = on_aspect_ratio_lost
-
         is_file = isinstance(src, str) and os.path.isfile(src)
         # Initialize it for videos if the source is a string and a file exists at the path
         if (is_file and _is_image_file(file_path=src)) or isinstance(src, np.ndarray):
@@ -87,6 +89,7 @@ class Webcam:
             self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
 
         self.as_bgr = as_bgr
+        self.__max_h, self.__max_w = self._max_available_resolution()
         assert self.raw_h > 0 and self.raw_w > 0, f"Invalid frame size: {self.raw_h}x{self.raw_w}. Probably the" \
                                                   f" check your source is valid."
 
@@ -118,15 +121,6 @@ class Webcam:
     @property
     def raw_w(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-
-    @property
-    def __max_h(self) -> int:
-        max_h, max_w = self._max_available_resolution()
-        return max_h
-    @property
-    def __max_w(self) -> int:
-        max_h, max_w = self._max_available_resolution()
-        return max_w
 
     @property
     def h(self) -> int:
@@ -294,18 +288,20 @@ class Webcam:
         :return: tuple. The final frame size (height, width).
         """
         # Set webcam to its maximum supported resolution
-        max_h, max_w = self._set_webcam_resolution(h=1e6, w=1e6)
+        self.__max_h, self.__max_w = self._set_webcam_resolution(h=self.max_raw_h, w=self.max_raw_w)
 
         if h is None and w is None:
-            return max_h, max_w
+            return self.__max_h, self.__max_w
 
         # Calculate the missing dimension while keeping the aspect ratio if only one dimension is provided
         if h is None or w is None:
             h, w = self._calculate_frame_size_keeping_aspect_ratio(h=h, w=w)
+        self._set_webcam_resolution(h=h, w=w)
 
         # Change the resolution if supported (and keeps the maximum aspect ratio if only one dimension was provided)
-        if self._is_resolution_natively_supported(h=h, w=w):
-            self._set_webcam_resolution(h=h, w=w)
+        #if self._is_resolution_natively_supported(h=h, w=w):
+            #self._set_webcam_resolution(h=h, w=w)
+
 
         return h, w
 
@@ -317,13 +313,14 @@ class Webcam:
         :param w: int. Desired width of the frames.
         :return: tuple. The final frame size (height, width) after attempting to set the desired resolution.
         """
+        max_h = self.__max_h if hasattr(self, '__max_h') else self.max_raw_h
+        max_w = self.__max_w if hasattr(self, '__max_w') else self.max_raw_w
 
-        # Set the webcam resolution
-        if self.raw_h != h:
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
-        if self.raw_w != w:
+        # Set the webcam resolution (Iterate two times because first time is not stable depending on the webcam)
+        if self.raw_w != w and not (self.raw_w == max_w and w > max_w):
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
-        # Get the actual resolution set by the webcam
+        if self.raw_h != h and not (self.raw_h == max_h and h > max_h):
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
         return self.raw_h, self.raw_w
 
 
@@ -339,6 +336,8 @@ class Webcam:
                                                           f"Got {type(h)}x{type(w)}."
         current_h, current_w = self.raw_h, self.raw_w
         supported_h, supported_w = self._set_webcam_resolution(h=h, w=w)
+        if supported_h == h and supported_w == w:
+            return True, True
         new_h, new_w = self._set_webcam_resolution(h=current_h, w=current_w)
         assert new_h == current_h and new_w == current_w, f"Webcam resolution could not be restored to {current_h}x{current_w}."
         return supported_h == h and supported_w == w
@@ -354,14 +353,12 @@ class Webcam:
         current_h, current_w = self.raw_h, self.raw_w
 
         # Set the webcam resolution to an extremely high value and get the resulting maximum allowed resolution
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1e6)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1e6)
-        max_h, max_w = self.raw_h, self.raw_w
+        self.__max_h, self.__max_w = self._set_webcam_resolution(h=self.max_raw_h, w=self.max_raw_w)
 
         # Restore the original resolution
         self._set_webcam_resolution(h=current_h, w=current_w)
 
-        return max_h, max_w
+        return self.__max_h, self.__max_w
 
 
 

@@ -50,17 +50,21 @@ def test_point_transformation(webcam, point: tuple[int|float]):
 if __name__ == '__main__':
 
     # Instantiate a Webcam instance with the background parameter
-    webcam = Webcam(src=os.path.join('resources', 'test_video.mp4'), w=640, run_in_background=True,
+    webcam = Webcam(#src=1,
+                    src=os.path.join('resources', 'test_video.mp4'),
+                    w=640, run_in_background=False,
                     homography_matrix=HOMOGRAPHY_MATRIX, crop_on_warping=True, on_aspect_ratio_lost='resize')
 
     # Iteratively read FRAMES_TO_READ frames
     for i, frame in zip(range(FRAMES_TO_READ), webcam):
+
         # Show the frames in a cv2 window
-        #cv2.imshow('Webcam Frame', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        cv2.imshow('Webcam Frame', cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         # Break the loop if the user presses the 'q' key
-        #if cv2.waitKey(1) & 0xFF == ord('q'):
-            #break
-        test_point_transformation(webcam=webcam, point=(200, 200, 220, 220))
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        #test_point_transformation(webcam=webcam, point=(200, 200, 220, 220))
 
 
     # Release the resources and close the window

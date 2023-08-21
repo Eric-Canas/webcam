@@ -25,7 +25,7 @@ class _PerspectiveManager:
         homography_matrix = np.array(homography_matrix, dtype=np.float64)
         if source_hw is not None:
             src_h, src_w = source_hw
-            self.scale_x, self.scale_y = src_w / default_w, src_h / default_h
+            self.scale_x, self.scale_y = default_w/src_w, default_h/src_h
             homography_matrix = self.__apply_rescale_to_homography_matrix(m=homography_matrix, src_h=src_h, src_w=src_w,
                                                                           dst_h=default_h, dst_w=default_w)
         else:
@@ -189,8 +189,8 @@ class _PerspectiveManager:
         w_transformed, h_transformed = np.ptp(square_transformed[:2], axis=1)
 
         # Calculate the magnifications in width and height
-        magnification_w = (w_transformed / line_length) / self.scale_x
-        magnification_h = (h_transformed / line_length) / self.scale_y
+        magnification_w = (w_transformed / line_length) * self.scale_x
+        magnification_h = (h_transformed / line_length) * self.scale_y
 
         return magnification_h, magnification_w
 
@@ -226,8 +226,8 @@ class _PerspectiveManager:
         points_transformed = points_transformed[:2].T
 
         # Rollback the scaling
-        points_transformed[:, 0] /= self.scale_x
-        points_transformed[:, 1] /= self.scale_y
+        points_transformed[:, 0] *= self.scale_x
+        points_transformed[:, 1] *= self.scale_y
 
         return points_transformed
 
@@ -272,7 +272,7 @@ class _PerspectiveManager:
         :return: np.ndarray. The rescaled homography matrix.
         """
         # Calculate scale factors
-        scale_x, scale_y = dst_w / src_w, dst_h / src_h
+        scale_x, scale_y = dst_w/src_w, dst_h/src_h
 
         # Create scaling matrix
         S = np.array(((scale_x, 0., 0.), (0., scale_y, 0.), (0., 0., 1.)), dtype=np.float32)
