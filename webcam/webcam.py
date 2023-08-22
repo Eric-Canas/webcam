@@ -87,7 +87,6 @@ class Webcam:
         # Otherwise assume it is a webcam (both webcam or RTSP stream)
         else:
             self.cap = cv2.VideoCapture(src) if not run_in_background else _WebcamBackground(src=src).start()
-
         self.as_bgr = as_bgr
         self.__max_h, self.__max_w = self._max_available_resolution()
         assert self.raw_h > 0 and self.raw_w > 0, f"Invalid frame size: {self.raw_h}x{self.raw_w}. Probably the" \
@@ -113,6 +112,7 @@ class Webcam:
         self.start_timestamp = time.time()
         self.max_frame_rate = max_frame_rate
         self.last_frame_timestamp = self.start_timestamp
+
 
     @property
     def raw_h(self) -> int:
@@ -288,6 +288,7 @@ class Webcam:
         :return: tuple. The final frame size (height, width).
         """
         # Set webcam to its maximum supported resolution
+        prev_h, prev_w = self.raw_h, self.raw_w
         self.__max_h, self.__max_w = self._set_webcam_resolution(h=self.max_raw_h, w=self.max_raw_w)
 
         if h is None and w is None:
@@ -296,11 +297,13 @@ class Webcam:
         # Calculate the missing dimension while keeping the aspect ratio if only one dimension is provided
         if h is None or w is None:
             h, w = self._calculate_frame_size_keeping_aspect_ratio(h=h, w=w)
-        self._set_webcam_resolution(h=h, w=w)
+
 
         # Change the resolution if supported (and keeps the maximum aspect ratio if only one dimension was provided)
         #if self._is_resolution_natively_supported(h=h, w=w):
             #self._set_webcam_resolution(h=h, w=w)
+        #else:
+        self._set_webcam_resolution(h=prev_h, w=prev_w)
 
 
         return h, w
