@@ -25,6 +25,7 @@ from webcam._image_webcam import _ImageWebcam
 from webcam._video_webcam import _VideoWebcam
 from webcam._webcam_background import _WebcamBackground
 from webcam._perspective_manager import _PerspectiveManager
+from webcam._video_recorder import _VideoRecorder
 
 CROP, RESIZE = 'crop', 'resize'
 INPUT, OUTPUT = 'input', 'output'
@@ -43,6 +44,9 @@ class Webcam:
         simulate_webcam: bool = True,
         max_raw_h: int = 1e6,
         max_raw_w: int = 1e6,
+        # --------- VIDEO RECORDING PARAMS ---------
+        recording_output_path: str | None = None,
+        recording_fps: int = 30,
         # ----------- HOMOGRAPHY PARAMS ------------
         homography_matrix: np.ndarray | list[list[float], ...] | None = None,
         crop_on_warping: bool = True,
@@ -59,6 +63,8 @@ class Webcam:
         :param run_in_background: bool. If True, the frames will be read in a background thread (speeding up the reading).
         :param max_frame_rate: int or None. The maximum frame rate to read the frames at. If None, there will be no limitations on frame rating.
         :param on_aspect_ratio_lost: str. What to do if the aspect ratio of the frames is different from the desired aspect ratio. Valid values are: 'crop' and 'resize'.
+        :param recording_output_path: str or None. If not None, all readed frames will be recorded to the given path.
+        :param recording_fps: int or None. If not None, the frames will be recorded at the given fps. Only applied when `recording_output_path` is not None.
         :param homography_matrix: np.ndarray or list[list[float], ...] or None. The homography matrix to warp the frames with.
         If passed, frames will be warped before any other processing.
         :param crop_on_warping: bool. Only applied when homography_matrix is given. Determines if there will be visible
@@ -113,6 +119,13 @@ class Webcam:
         self.max_frame_rate = max_frame_rate
         self.last_frame_timestamp = self.start_timestamp
 
+        self.video_recorder = None
+        if recording_output_path is not None:
+            self.video_recorder = _VideoRecorder(output_path=recording_output_path,
+                                                 fps=recording_fps,
+                                                 not_override=True,
+                                                 frame_size_hw=(self.h, self.w))
+
 
     @property
     def raw_h(self) -> int:
@@ -155,9 +168,13 @@ class Webcam:
             if (h, w) != (self.h, self.w):
                 frame = self.__adjust_image_shape(frame=frame, h=self.h, w=self.w)
 
-        # Convert the frame from BGR to RGB format if necessary
-        if ret and not self.as_bgr:
-            cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB, dst=frame)
+        # Save before converting to RGB if necessary
+        if ret:
+            if self.video_recorder is not None:
+                self.video_recorder.write(frame=frame)
+            # Convert the frame from BGR to RGB format if necessary
+            if not self.as_bgr:
+                cv2.cvtColor(src=frame, code=cv2.COLOR_BGR2RGB, dst=frame)
 
         return ret, frame
 
@@ -559,6 +576,8 @@ class Webcam:
         # Close the video
         if self._background:
             self.stop()
+        if hasattr(self, 'video_recorder') and self.video_recorder is not None:
+            self.video_recorder.close()
         self.release()
         self.cap = None
 
