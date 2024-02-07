@@ -45,7 +45,7 @@ from webcam import Webcam
 # Define a simple webcam object that will get video stream from webcam (src=0),
 #  with a frame width of 640 (auto setting heigth to keep original aspect ratio)
 webcam = Webcam(src=0, w=640)
-print(f"Frame size: {webcam.w} x {webcam.h})
+print(f"Frame size: {webcam.w} x {webcam.h}")
 
 
 for frame in webcam:
